@@ -24,9 +24,9 @@ class FilamentPanelAccessTest extends TestCase
         $this->get(Filament::getLoginUrl())->assertOk();
     }
 
-    public function test_authenticated_users_can_access_the_panel(): void
+    public function test_active_users_with_a_role_can_access_the_panel(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->seoExecutive()->create();
 
         $this->actingAs($user)
             ->get('/admin')
@@ -34,16 +34,59 @@ class FilamentPanelAccessTest extends TestCase
             ->assertSee($user->name);
     }
 
-    public function test_users_may_access_the_admin_panel(): void
+    public function test_every_active_role_can_access_the_panel(): void
+    {
+        foreach ([
+            User::factory()->superAdmin()->create(),
+            User::factory()->seoManager()->create(),
+            User::factory()->seoExecutive()->create(),
+        ] as $user) {
+            $this->assertTrue($user->canAccessPanel(Filament::getPanel('admin')));
+        }
+    }
+
+    public function test_inactive_users_cannot_access_the_panel(): void
+    {
+        $user = User::factory()->superAdmin()->inactive()->create();
+
+        $this->assertFalse($user->canAccessPanel(Filament::getPanel('admin')));
+
+        $this->actingAs($user)
+            ->get('/admin')
+            ->assertForbidden();
+    }
+
+    public function test_inactive_users_cannot_log_in(): void
+    {
+        $user = User::factory()->seoManager()->inactive()->create([
+            'password' => 'secret-password',
+        ]);
+
+        Livewire::test(Login::class)
+            ->fillForm([
+                'email' => $user->email,
+                'password' => 'secret-password',
+            ])
+            ->call('authenticate')
+            ->assertHasFormErrors(['email']);
+
+        $this->assertGuest();
+    }
+
+    public function test_users_without_a_role_cannot_access_the_panel(): void
     {
         $user = User::factory()->create();
 
-        $this->assertTrue($user->canAccessPanel(Filament::getPanel('admin')));
+        $this->assertFalse($user->canAccessPanel(Filament::getPanel('admin')));
+
+        $this->actingAs($user)
+            ->get('/admin')
+            ->assertForbidden();
     }
 
     public function test_a_user_can_log_in_through_the_filament_login_form(): void
     {
-        $user = User::factory()->create([
+        $user = User::factory()->seoExecutive()->create([
             'password' => 'secret-password',
         ]);
 
@@ -60,7 +103,7 @@ class FilamentPanelAccessTest extends TestCase
 
     public function test_invalid_credentials_are_rejected(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->seoExecutive()->create();
 
         Livewire::test(Login::class)
             ->fillForm([

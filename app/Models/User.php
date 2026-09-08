@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\Permission;
+use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -23,6 +26,8 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+        'is_active',
+        'email_verified_at',
     ];
 
     /**
@@ -45,17 +50,53 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
     /**
-     * Determine whether the user may access the given Filament panel.
-     *
-     * Milestone 0: every authenticated user may access the admin panel.
-     * Milestone 1 will restrict this by role and active status.
+     * @return BelongsToMany<Role, $this>
+     */
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class)->withTimestamps();
+    }
+
+    /**
+     * The user's single system role, if one has been assigned.
+     */
+    public function role(): ?UserRole
+    {
+        return $this->roles->first()?->key;
+    }
+
+    public function hasRole(UserRole $role): bool
+    {
+        return $this->role() === $role;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole(UserRole::SuperAdmin);
+    }
+
+    /**
+     * Inactive users hold no permissions regardless of role.
+     */
+    public function hasPermission(Permission $permission): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        return $this->role()?->hasPermission($permission) ?? false;
+    }
+
+    /**
+     * Only active users with an assigned role may use the panel.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return true;
+        return $this->is_active && $this->role() !== null;
     }
 }
