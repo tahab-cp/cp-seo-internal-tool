@@ -32,7 +32,7 @@ class QueueAndSchedulerTest extends TestCase
     public function test_the_scheduler_commands_are_operational(): void
     {
         $this->assertSame(0, Artisan::call('schedule:list'));
-        $this->assertStringContainsString('No scheduled tasks have been defined', Artisan::output());
+        $this->assertStringContainsString('seo:ensure-monthly-cycles', Artisan::output());
 
         $this->assertSame(0, Artisan::call('schedule:run'));
     }

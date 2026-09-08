@@ -32,6 +32,8 @@ enum Permission: string
 
     case ManagePackages = 'packages.manage';
 
+    case EnsureMonthlyCycles = 'monthly_cycles.ensure';
+
     public function label(): string
     {
         return match ($this) {
@@ -53,6 +55,7 @@ enum Permission: string
             self::AssignProjectPackage => 'Assign a package to a project',
             self::ManageProjectTargets => 'Configure project target overrides',
             self::ManagePackages => 'Manage packages and their targets (Settings)',
+            self::EnsureMonthlyCycles => 'Manually create missing monthly cycles',
         };
     }
 }

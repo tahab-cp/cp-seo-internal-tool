@@ -1,15 +1,19 @@
 <?php
 
+use Illuminate\Support\Facades\Schedule;
+
 /*
 |--------------------------------------------------------------------------
 | Scheduled Tasks
 |--------------------------------------------------------------------------
 |
-| No scheduled tasks are defined yet. Future milestones register them here
-| with the Illuminate\Support\Facades\Schedule facade (for example monthly
-| cycle creation), dispatching classes from app/Jobs.
-|
-| Run `php artisan schedule:work` locally or add `php artisan schedule:run`
-| to cron in production.
+| Scheduling only: business logic lives in app/Console/Commands and
+| app/Actions. Run `php artisan schedule:work` locally or add
+| `php artisan schedule:run` to cron in production.
 |
 */
+
+// Give every active project its monthly cycle (with target snapshot) at month start.
+Schedule::command('seo:ensure-monthly-cycles')
+    ->monthlyOn(1, '00:05')
+    ->withoutOverlapping();

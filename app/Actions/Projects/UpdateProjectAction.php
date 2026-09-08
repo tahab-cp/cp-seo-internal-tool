@@ -2,6 +2,8 @@
 
 namespace App\Actions\Projects;
 
+use App\Actions\MonthlyCycles\EnsureMonthlyCycleAction;
+use App\Enums\ProjectStatus;
 use App\Models\Project;
 use App\Services\ActiveUserGuard;
 use Illuminate\Support\Arr;
@@ -21,6 +23,7 @@ class UpdateProjectAction
         protected SyncProjectTeamAction $syncProjectTeam,
         protected ChangeProjectPackageAction $changeProjectPackage,
         protected SyncProjectTargetOverridesAction $syncTargetOverrides,
+        protected EnsureMonthlyCycleAction $ensureMonthlyCycle,
         protected ActiveUserGuard $activeUsers,
     ) {}
 
@@ -36,6 +39,8 @@ class UpdateProjectAction
         ?array $targetOverrides = null,
     ): Project {
         return DB::transaction(function () use ($project, $attributes, $teamMemberIds, $targetOverrides): Project {
+            $wasActive = $project->status === ProjectStatus::Active;
+
             $project->fill(Arr::only($attributes, [
                 'client_id',
                 'name',
@@ -77,6 +82,14 @@ class UpdateProjectAction
 
             if ($targetOverrides !== null) {
                 $project = $this->syncTargetOverrides->handle($project, $targetOverrides);
+            }
+
+            // Lifecycle: a project becoming ACTIVE gets its current monthly cycle,
+            // ensured last so the snapshot reflects the final package, overrides,
+            // team and status. Active → active and transitions to any other
+            // status never create cycles here.
+            if (! $wasActive && $project->status === ProjectStatus::Active) {
+                $this->ensureMonthlyCycle->handle($project);
             }
 
             return $project;

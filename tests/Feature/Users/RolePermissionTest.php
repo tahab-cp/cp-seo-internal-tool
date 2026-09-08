@@ -40,6 +40,7 @@ class RolePermissionTest extends TestCase
             Permission::AssignProjectTeam,
             Permission::AssignProjectPackage,
             Permission::ManageProjectTargets,
+            Permission::EnsureMonthlyCycles,
         ], UserRole::SeoManager->permissions());
 
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::ManagePackages));

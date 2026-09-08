@@ -55,6 +55,14 @@ class ProjectPolicy
     }
 
     /**
+     * Manually create a missing monthly cycle for this project.
+     */
+    public function ensureMonthlyCycle(User $user, Project $project): bool
+    {
+        return $user->hasPermission(Permission::EnsureMonthlyCycles) && $this->view($user, $project);
+    }
+
+    /**
      * Archiving soft-deletes the project so its history survives.
      */
     public function archive(User $user, Project $project): bool

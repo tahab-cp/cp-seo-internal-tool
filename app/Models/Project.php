@@ -83,6 +83,16 @@ class Project extends Model
     }
 
     /**
+     * Reporting periods, one per year/month.
+     *
+     * @return HasMany<MonthlyCycle, $this>
+     */
+    public function monthlyCycles(): HasMany
+    {
+        return $this->hasMany(MonthlyCycle::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function primarySeoUser(): BelongsTo

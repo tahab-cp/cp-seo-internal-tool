@@ -2,6 +2,7 @@
 
 namespace App\Actions\Projects;
 
+use App\Actions\MonthlyCycles\EnsureMonthlyCycleAction;
 use App\Enums\ProjectStatus;
 use App\Models\Project;
 use App\Services\ActiveUserGuard;
@@ -13,17 +14,25 @@ class CreateProjectAction
         protected SyncProjectTeamAction $syncProjectTeam,
         protected ChangeProjectPackageAction $changeProjectPackage,
         protected SyncProjectTargetOverridesAction $syncTargetOverrides,
+        protected EnsureMonthlyCycleAction $ensureMonthlyCycle,
         protected ActiveUserGuard $activeUsers,
     ) {}
 
     /**
-     * Create a project for a client, attach its team, assign its package and
-     * apply any intentional target overrides.
+     * The project creation workflow, in one transaction:
+     *
+     *   1. create the project
+     *   2. attach the team
+     *   3. assign the package
+     *   4. apply intentional target overrides
+     *   5. ensure the current monthly cycle (ACTIVE projects only)
+     *
+     * The cycle is created last so its target snapshot reflects the final
+     * package/override configuration. Onboarding, paused, completed and
+     * cancelled projects do not receive a cycle automatically.
      *
      * package_id may be null for legacy/migrated records; the Filament form
      * requires a package for projects created through the application.
-     * Later milestones extend this workflow with onboarding tasks and the
-     * first monthly cycle, as documented in docs/business-rules.md.
      *
      * @param  array<string, mixed>  $attributes
      * @param  list<int|string>  $teamMemberIds
@@ -52,6 +61,10 @@ class CreateProjectAction
 
             if ($targetOverrides !== []) {
                 $project = $this->syncTargetOverrides->handle($project, $targetOverrides);
+            }
+
+            if ($project->status === ProjectStatus::Active) {
+                $this->ensureMonthlyCycle->handle($project);
             }
 
             return $project;

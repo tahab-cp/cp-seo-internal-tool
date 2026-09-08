@@ -18,6 +18,7 @@ class SchemaScopeTest extends TestCase
         foreach ([
             'users', 'roles', 'role_user', 'clients', 'projects', 'project_user',
             'packages', 'package_targets', 'project_target_overrides',
+            'monthly_cycles', 'monthly_cycle_targets',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -26,7 +27,7 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'monthly_cycles', 'monthly_cycle_targets', 'task_templates', 'task_template_items', 'tasks',
+            'task_templates', 'task_template_items', 'tasks',
             'pages', 'page_optimizations', 'keywords', 'ranking_snapshots', 'backlinks', 'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics', 'ga4_monthly_metrics',
             'ga4_country_metrics', 'authority_metrics', 'monthly_notes', 'project_report_sections',
@@ -58,6 +59,18 @@ class SchemaScopeTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_monthly_cycle_tables_match_the_milestone_five_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'year', 'month', 'status', 'started_at', 'locked_at', 'locked_by',
+            'created_at', 'updated_at',
+        ], Schema::getColumnListing('monthly_cycles'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'monthly_cycle_id', 'target_key', 'label', 'target_value', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('monthly_cycle_targets'));
     }
 
     public function test_package_tables_match_the_milestone_four_columns(): void
