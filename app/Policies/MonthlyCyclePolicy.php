@@ -23,6 +23,17 @@ class MonthlyCyclePolicy
         return $user->can('view', $cycle->project);
     }
 
+    /**
+     * Monthly analytics (GSC, GA4, authority) may be entered or replaced
+     * by anyone who can see the project, while the cycle is unlocked. A
+     * locked cycle is read-only for everyone, Super Admin included, until
+     * the formal unlock workflow (Milestone 14).
+     */
+    public function manageAnalytics(User $user, MonthlyCycle $cycle): bool
+    {
+        return $this->view($user, $cycle) && ! $cycle->isLocked();
+    }
+
     public function create(User $user): bool
     {
         return false;

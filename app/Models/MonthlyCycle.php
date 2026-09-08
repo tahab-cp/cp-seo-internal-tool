@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Project + year + month: the reporting-period anchor for all monthly
@@ -121,6 +122,60 @@ class MonthlyCycle extends Model
     public function contentItems(): HasMany
     {
         return $this->hasMany(ContentItem::class);
+    }
+
+    /**
+     * The month's Google Search Console summary, if entered.
+     *
+     * @return HasOne<GscMonthlyMetric, $this>
+     */
+    public function gscMonthlyMetric(): HasOne
+    {
+        return $this->hasOne(GscMonthlyMetric::class);
+    }
+
+    /**
+     * @return HasMany<GscQueryMetric, $this>
+     */
+    public function gscQueryMetrics(): HasMany
+    {
+        return $this->hasMany(GscQueryMetric::class);
+    }
+
+    /**
+     * @return HasMany<GscPageMetric, $this>
+     */
+    public function gscPageMetrics(): HasMany
+    {
+        return $this->hasMany(GscPageMetric::class);
+    }
+
+    /**
+     * The month's Google Analytics 4 summary, if entered.
+     *
+     * @return HasOne<Ga4MonthlyMetric, $this>
+     */
+    public function ga4MonthlyMetric(): HasOne
+    {
+        return $this->hasOne(Ga4MonthlyMetric::class);
+    }
+
+    /**
+     * @return HasMany<Ga4CountryMetric, $this>
+     */
+    public function ga4CountryMetrics(): HasMany
+    {
+        return $this->hasMany(Ga4CountryMetric::class);
+    }
+
+    /**
+     * The month's site-authority snapshot, if entered.
+     *
+     * @return HasOne<AuthorityMetric, $this>
+     */
+    public function authorityMetric(): HasOne
+    {
+        return $this->hasOne(AuthorityMetric::class);
     }
 
     public function period(): CyclePeriod

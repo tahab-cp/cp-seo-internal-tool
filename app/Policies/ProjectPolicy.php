@@ -117,6 +117,16 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may record its monthly analytics; locked
+     * cycles are enforced by MonthlyCyclePolicy::manageAnalytics and the
+     * analytics actions.
+     */
+    public function manageAnalytics(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
      * Generate onboarding tasks from a task template (Admin / Manager).
      * Callable with the class name (no project) to gate the create form.
      */

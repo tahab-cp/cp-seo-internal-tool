@@ -43,6 +43,11 @@ class ViewProject extends ViewRecord
                 ->icon(Heroicon::OutlinedPencil)
                 ->color('gray')
                 ->url(fn (Project $record): string => ProjectResource::getUrl('content', ['record' => $record])),
+            Action::make('analytics')
+                ->label('Analytics')
+                ->icon(Heroicon::OutlinedChartBar)
+                ->color('gray')
+                ->url(fn (Project $record): string => ProjectResource::getUrl('analytics', ['record' => $record])),
             Action::make('monthlyCycles')
                 ->label('Monthly cycles')
                 ->icon(Heroicon::OutlinedCalendarDays)

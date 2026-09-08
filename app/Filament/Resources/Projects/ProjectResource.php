@@ -6,6 +6,7 @@ use App\Enums\Permission;
 use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
+use App\Filament\Resources\Projects\Pages\ProjectAnalytics;
 use App\Filament\Resources\Projects\Pages\ProjectBacklinks;
 use App\Filament\Resources\Projects\Pages\ProjectContent;
 use App\Filament\Resources\Projects\Pages\ProjectKeywordDetail;
@@ -99,6 +100,7 @@ class ProjectResource extends Resource
             'keyword' => ProjectKeywordDetail::route('/{record}/keywords/{keyword}'),
             'backlinks' => ProjectBacklinks::route('/{record}/backlinks'),
             'content' => ProjectContent::route('/{record}/content'),
+            'analytics' => ProjectAnalytics::route('/{record}/analytics'),
         ];
     }
 
