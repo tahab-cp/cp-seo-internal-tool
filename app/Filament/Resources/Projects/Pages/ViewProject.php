@@ -23,6 +23,11 @@ class ViewProject extends ViewRecord
                 ->icon(Heroicon::OutlinedClipboardDocumentList)
                 ->color('gray')
                 ->url(fn (Project $record): string => ProjectResource::getUrl('tasks', ['record' => $record])),
+            Action::make('pages')
+                ->label('Pages')
+                ->icon(Heroicon::OutlinedDocumentText)
+                ->color('gray')
+                ->url(fn (Project $record): string => ProjectResource::getUrl('pages', ['record' => $record])),
             Action::make('monthlyCycles')
                 ->label('Monthly cycles')
                 ->icon(Heroicon::OutlinedCalendarDays)

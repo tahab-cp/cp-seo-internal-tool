@@ -20,6 +20,7 @@ class SchemaScopeTest extends TestCase
             'packages', 'package_targets', 'project_target_overrides',
             'monthly_cycles', 'monthly_cycle_targets',
             'task_templates', 'task_template_items', 'tasks',
+            'pages', 'page_optimizations',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -28,7 +29,7 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'pages', 'page_optimizations', 'keywords', 'ranking_snapshots', 'backlinks', 'content_items',
+            'keywords', 'ranking_snapshots', 'backlinks', 'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics', 'ga4_monthly_metrics',
             'ga4_country_metrics', 'authority_metrics', 'monthly_notes', 'project_report_sections',
             'monthly_reports', 'monthly_report_sections',
@@ -59,6 +60,20 @@ class SchemaScopeTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_page_tables_match_the_milestone_seven_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'url', 'path', 'title', 'page_type', 'status',
+            'created_at', 'updated_at', 'deleted_at',
+        ], Schema::getColumnListing('pages'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'page_id', 'monthly_cycle_id', 'user_id', 'optimized_at',
+            'meta_title_updated', 'meta_description_updated', 'content_updated', 'internal_links_updated',
+            'schema_updated', 'notes', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('page_optimizations'));
     }
 
     public function test_task_tables_match_the_milestone_six_columns(): void

@@ -83,6 +83,16 @@ class MonthlyCycle extends Model
         return $this->hasMany(Task::class);
     }
 
+    /**
+     * Page optimisation events reported in this cycle.
+     *
+     * @return HasMany<PageOptimization, $this>
+     */
+    public function pageOptimizations(): HasMany
+    {
+        return $this->hasMany(PageOptimization::class);
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);

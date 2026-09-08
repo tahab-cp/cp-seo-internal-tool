@@ -72,6 +72,16 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may maintain its pages and record
+     * optimisation work. Locked cycles are enforced by
+     * PageOptimizationPolicy and the page actions.
+     */
+    public function managePages(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
      * Generate onboarding tasks from a task template (Admin / Manager).
      * Callable with the class name (no project) to gate the create form.
      */

@@ -7,6 +7,8 @@ use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
 use App\Filament\Resources\Projects\Pages\ProjectMonthlyCycles;
+use App\Filament\Resources\Projects\Pages\ProjectPageDetail;
+use App\Filament\Resources\Projects\Pages\ProjectPages;
 use App\Filament\Resources\Projects\Pages\ProjectTasks;
 use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
@@ -87,6 +89,8 @@ class ProjectResource extends Resource
             'edit' => EditProject::route('/{record}/edit'),
             'monthly-cycles' => ProjectMonthlyCycles::route('/{record}/monthly-cycles'),
             'tasks' => ProjectTasks::route('/{record}/tasks'),
+            'pages' => ProjectPages::route('/{record}/pages'),
+            'page' => ProjectPageDetail::route('/{record}/pages/{page}'),
         ];
     }
 

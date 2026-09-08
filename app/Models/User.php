@@ -97,6 +97,16 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Page optimisation events recorded by this user.
+     *
+     * @return HasMany<PageOptimization, $this>
+     */
+    public function pageOptimizations(): HasMany
+    {
+        return $this->hasMany(PageOptimization::class);
+    }
+
+    /**
      * Every project this user may see, according to their role.
      *
      * @return Builder<Project>

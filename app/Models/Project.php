@@ -103,6 +103,24 @@ class Project extends Model
     }
 
     /**
+     * Website pages (project master data).
+     *
+     * @return HasMany<Page, $this>
+     */
+    public function pages(): HasMany
+    {
+        return $this->hasMany(Page::class);
+    }
+
+    /**
+     * @return HasMany<PageOptimization, $this>
+     */
+    public function pageOptimizations(): HasMany
+    {
+        return $this->hasMany(PageOptimization::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function primarySeoUser(): BelongsTo

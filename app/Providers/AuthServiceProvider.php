@@ -6,6 +6,8 @@ use App\Enums\Permission;
 use App\Models\Client;
 use App\Models\MonthlyCycle;
 use App\Models\Package;
+use App\Models\Page;
+use App\Models\PageOptimization;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskTemplate;
@@ -13,6 +15,8 @@ use App\Models\User;
 use App\Policies\ClientPolicy;
 use App\Policies\MonthlyCyclePolicy;
 use App\Policies\PackagePolicy;
+use App\Policies\PageOptimizationPolicy;
+use App\Policies\PagePolicy;
 use App\Policies\ProjectPolicy;
 use App\Policies\TaskPolicy;
 use App\Policies\TaskTemplatePolicy;
@@ -35,6 +39,8 @@ class AuthServiceProvider extends ServiceProvider
         MonthlyCycle::class => MonthlyCyclePolicy::class,
         TaskTemplate::class => TaskTemplatePolicy::class,
         Task::class => TaskPolicy::class,
+        Page::class => PagePolicy::class,
+        PageOptimization::class => PageOptimizationPolicy::class,
     ];
 
     public function boot(): void
