@@ -178,6 +178,26 @@ class MonthlyCycle extends Model
         return $this->hasOne(AuthorityMetric::class);
     }
 
+    /**
+     * Narrative notes captured during the month.
+     *
+     * @return HasMany<MonthlyNote, $this>
+     */
+    public function monthlyNotes(): HasMany
+    {
+        return $this->hasMany(MonthlyNote::class);
+    }
+
+    /**
+     * The month's single report, once preparation has begun.
+     *
+     * @return HasOne<MonthlyReport, $this>
+     */
+    public function monthlyReport(): HasOne
+    {
+        return $this->hasOne(MonthlyReport::class);
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);

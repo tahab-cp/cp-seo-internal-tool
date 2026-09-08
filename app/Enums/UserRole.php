@@ -68,6 +68,7 @@ enum UserRole: string implements HasColor, HasLabel
                 Permission::EnsureMonthlyCycles,
                 Permission::ManageTaskTemplates,
                 Permission::GenerateOnboardingTasks,
+                Permission::ManageReportSections,
             ],
             self::SeoExecutive => [
                 Permission::ViewAssignedProjects,

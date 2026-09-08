@@ -10,6 +10,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\RestoreAction;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Gate;
 
 class ViewProject extends ViewRecord
 {
@@ -48,6 +49,22 @@ class ViewProject extends ViewRecord
                 ->icon(Heroicon::OutlinedChartBar)
                 ->color('gray')
                 ->url(fn (Project $record): string => ProjectResource::getUrl('analytics', ['record' => $record])),
+            Action::make('monthlyWork')
+                ->label('Monthly work')
+                ->icon(Heroicon::OutlinedLightBulb)
+                ->color('gray')
+                ->url(fn (Project $record): string => ProjectResource::getUrl('monthly-work', ['record' => $record])),
+            Action::make('reports')
+                ->label('Reports')
+                ->icon(Heroicon::OutlinedDocumentChartBar)
+                ->color('gray')
+                ->url(fn (Project $record): string => ProjectResource::getUrl('reports', ['record' => $record])),
+            Action::make('reportSections')
+                ->label('Report sections')
+                ->icon(Heroicon::OutlinedAdjustmentsHorizontal)
+                ->color('gray')
+                ->visible(fn (Project $record): bool => Gate::allows('manageReportSections', $record))
+                ->url(fn (Project $record): string => ProjectResource::getUrl('report-sections', ['record' => $record])),
             Action::make('monthlyCycles')
                 ->label('Monthly cycles')
                 ->icon(Heroicon::OutlinedCalendarDays)

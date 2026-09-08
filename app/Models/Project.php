@@ -151,6 +151,16 @@ class Project extends Model
     }
 
     /**
+     * The project's report template (future reports only).
+     *
+     * @return HasMany<ProjectReportSection, $this>
+     */
+    public function reportSections(): HasMany
+    {
+        return $this->hasMany(ProjectReportSection::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function primarySeoUser(): BelongsTo

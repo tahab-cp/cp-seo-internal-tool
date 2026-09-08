@@ -37,6 +37,8 @@ enum Permission: string
     case ManageTaskTemplates = 'task_templates.manage';
     case GenerateOnboardingTasks = 'projects.generate_onboarding';
 
+    case ManageReportSections = 'projects.manage_report_sections';
+
     public function label(): string
     {
         return match ($this) {
@@ -61,6 +63,7 @@ enum Permission: string
             self::EnsureMonthlyCycles => 'Manually create missing monthly cycles',
             self::ManageTaskTemplates => 'Manage onboarding task templates (Settings)',
             self::GenerateOnboardingTasks => 'Generate onboarding tasks for a project',
+            self::ManageReportSections => 'Configure a project\'s report sections (future reports)',
         };
     }
 }

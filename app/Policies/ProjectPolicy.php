@@ -127,6 +127,41 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may capture its monthly notes; locked
+     * cycles are enforced by MonthlyNotePolicy and the note actions.
+     */
+    public function manageNotes(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
+     * Anyone who can see a project may view its reports and readiness.
+     */
+    public function viewReports(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
+     * Anyone who can see a project may prepare its monthly reports
+     * (ensure the draft, edit draft content). Never the template.
+     */
+    public function prepareReports(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
+     * The report template (sections, required flags, order) is management
+     * configuration: Super Admin and SEO Manager only.
+     */
+    public function manageReportSections(User $user, Project $project): bool
+    {
+        return $user->hasPermission(Permission::ManageReportSections) && $this->view($user, $project);
+    }
+
+    /**
      * Generate onboarding tasks from a task template (Admin / Manager).
      * Callable with the class name (no project) to gate the create form.
      */

@@ -34,6 +34,23 @@ class MonthlyCyclePolicy
         return $this->view($user, $cycle) && ! $cycle->isLocked();
     }
 
+    /**
+     * Capture or edit narrative notes for the month while it is unlocked.
+     */
+    public function manageNotes(User $user, MonthlyCycle $cycle): bool
+    {
+        return $this->view($user, $cycle) && ! $cycle->isLocked();
+    }
+
+    /**
+     * Start (ensure) the month's draft report. Executives prepare the
+     * reports for their own projects; the project template is untouched.
+     */
+    public function ensureReport(User $user, MonthlyCycle $cycle): bool
+    {
+        return $this->view($user, $cycle) && ! $cycle->isLocked();
+    }
+
     public function create(User $user): bool
     {
         return false;

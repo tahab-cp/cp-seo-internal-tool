@@ -12,8 +12,11 @@ use App\Filament\Resources\Projects\Pages\ProjectContent;
 use App\Filament\Resources\Projects\Pages\ProjectKeywordDetail;
 use App\Filament\Resources\Projects\Pages\ProjectKeywords;
 use App\Filament\Resources\Projects\Pages\ProjectMonthlyCycles;
+use App\Filament\Resources\Projects\Pages\ProjectMonthlyWork;
 use App\Filament\Resources\Projects\Pages\ProjectPageDetail;
 use App\Filament\Resources\Projects\Pages\ProjectPages;
+use App\Filament\Resources\Projects\Pages\ProjectReports;
+use App\Filament\Resources\Projects\Pages\ProjectReportSections;
 use App\Filament\Resources\Projects\Pages\ProjectTasks;
 use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
@@ -101,6 +104,9 @@ class ProjectResource extends Resource
             'backlinks' => ProjectBacklinks::route('/{record}/backlinks'),
             'content' => ProjectContent::route('/{record}/content'),
             'analytics' => ProjectAnalytics::route('/{record}/analytics'),
+            'monthly-work' => ProjectMonthlyWork::route('/{record}/monthly-work'),
+            'reports' => ProjectReports::route('/{record}/reports'),
+            'report-sections' => ProjectReportSections::route('/{record}/report-sections'),
         ];
     }
 

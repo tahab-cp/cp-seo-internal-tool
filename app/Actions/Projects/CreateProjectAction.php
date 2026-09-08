@@ -3,6 +3,7 @@
 namespace App\Actions\Projects;
 
 use App\Actions\MonthlyCycles\EnsureMonthlyCycleAction;
+use App\Actions\Reports\EnsureProjectReportSectionsAction;
 use App\Actions\Tasks\GenerateOnboardingTasksAction;
 use App\Enums\ProjectStatus;
 use App\Models\Project;
@@ -20,6 +21,7 @@ class CreateProjectAction
         protected SyncProjectTargetOverridesAction $syncTargetOverrides,
         protected GenerateOnboardingTasksAction $generateOnboardingTasks,
         protected EnsureMonthlyCycleAction $ensureMonthlyCycle,
+        protected EnsureProjectReportSectionsAction $ensureReportSections,
         protected ActiveUserGuard $activeUsers,
     ) {}
 
@@ -33,6 +35,7 @@ class CreateProjectAction
      *   5. optionally generate the onboarding checklist (after the owner,
      *      package and overrides are final so assignment is correct)
      *   6. ensure the current monthly cycle (ACTIVE projects only)
+     *   7. initialise the default report section configuration
      *
      * Any failure, including onboarding generation, rolls everything back.
      *
@@ -85,6 +88,8 @@ class CreateProjectAction
             if ($project->status === ProjectStatus::Active) {
                 $this->ensureMonthlyCycle->handle($project);
             }
+
+            $this->ensureReportSections->handle($project);
 
             return $project;
         });

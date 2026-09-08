@@ -25,6 +25,7 @@ class SchemaScopeTest extends TestCase
             'backlinks', 'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics',
             'ga4_monthly_metrics', 'ga4_country_metrics', 'authority_metrics',
+            'monthly_notes', 'project_report_sections', 'monthly_reports', 'monthly_report_sections',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -33,8 +34,7 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'monthly_notes', 'project_report_sections', 'monthly_reports', 'monthly_report_sections',
-            'report_snapshots', 'csv_imports', 'analytics_syncs',
+            'report_snapshots', 'report_files', 'audit_logs', 'cycle_unlocks', 'csv_imports', 'analytics_syncs',
         ];
 
         foreach ($future as $table) {
@@ -62,6 +62,27 @@ class SchemaScopeTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_notes_and_report_tables_match_the_milestone_twelve_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'monthly_cycle_id', 'type', 'title', 'body', 'sort_order', 'created_by', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('monthly_notes'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'section_key', 'title', 'is_enabled', 'is_required', 'sort_order', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('project_report_sections'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'monthly_cycle_id', 'status', 'executive_summary', 'review_notes', 'snapshot_json', 'generated_pdf_path',
+            'generated_at', 'finalized_at', 'finalized_by', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('monthly_reports'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'monthly_report_id', 'section_key', 'title', 'is_enabled', 'is_required', 'status', 'sort_order',
+            'custom_text', 'settings_json', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('monthly_report_sections'));
     }
 
     public function test_analytics_tables_match_the_milestone_eleven_columns(): void

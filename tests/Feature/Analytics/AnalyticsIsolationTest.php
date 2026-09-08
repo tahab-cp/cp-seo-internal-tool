@@ -144,16 +144,13 @@ class AnalyticsIsolationTest extends TestCase
         $this->assertSame(1, $this->september->pageOptimizations()->count());
     }
 
-    public function test_no_notes_reports_readiness_pdf_or_integrations_are_introduced(): void
+    public function test_no_pdf_or_integrations_are_introduced_by_analytics(): void
     {
-        foreach (['monthly_notes', 'monthly_reports', 'monthly_report_sections', 'report_snapshots', 'csv_imports', 'analytics_syncs', 'oauth_tokens'] as $table) {
+        foreach (['report_snapshots', 'csv_imports', 'analytics_syncs', 'oauth_tokens'] as $table) {
             $this->assertFalse(Schema::hasTable($table), "Table [{$table}] must not exist yet.");
         }
 
         foreach ([
-            app_path('Models/MonthlyNote.php'),
-            app_path('Models/MonthlyReport.php'),
-            app_path('Services/Reports'),
             app_path('Services/Pdf'),
             app_path('Services/Integrations'),
             app_path('Jobs/SyncGscMetrics.php'),
