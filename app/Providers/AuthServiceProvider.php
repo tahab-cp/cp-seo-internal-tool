@@ -4,9 +4,11 @@ namespace App\Providers;
 
 use App\Enums\Permission;
 use App\Models\Client;
+use App\Models\Package;
 use App\Models\Project;
 use App\Models\User;
 use App\Policies\ClientPolicy;
+use App\Policies\PackagePolicy;
 use App\Policies\ProjectPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
@@ -23,6 +25,7 @@ class AuthServiceProvider extends ServiceProvider
         User::class => UserPolicy::class,
         Client::class => ClientPolicy::class,
         Project::class => ProjectPolicy::class,
+        Package::class => PackagePolicy::class,
     ];
 
     public function boot(): void

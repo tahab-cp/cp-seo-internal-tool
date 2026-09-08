@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -29,6 +30,7 @@ class Project extends Model
      */
     protected $fillable = [
         'client_id',
+        'package_id',
         'name',
         'website_url',
         'target_location',
@@ -57,6 +59,27 @@ class Project extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * The package currently assigned, active or not. An inactive package
+     * remains assigned and still resolves its targets.
+     *
+     * @return BelongsTo<Package, $this>
+     */
+    public function package(): BelongsTo
+    {
+        return $this->belongsTo(Package::class);
+    }
+
+    /**
+     * Project-specific values for keys defined by the assigned package.
+     *
+     * @return HasMany<ProjectTargetOverride, $this>
+     */
+    public function targetOverrides(): HasMany
+    {
+        return $this->hasMany(ProjectTargetOverride::class);
     }
 
     /**

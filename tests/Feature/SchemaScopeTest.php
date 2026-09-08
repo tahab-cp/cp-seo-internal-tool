@@ -15,7 +15,10 @@ class SchemaScopeTest extends TestCase
 
     public function test_only_the_delivered_tables_exist(): void
     {
-        foreach (['users', 'roles', 'role_user', 'clients', 'projects', 'project_user'] as $table) {
+        foreach ([
+            'users', 'roles', 'role_user', 'clients', 'projects', 'project_user',
+            'packages', 'package_targets', 'project_target_overrides',
+        ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
     }
@@ -23,7 +26,6 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'packages', 'package_targets', 'project_target_overrides',
             'monthly_cycles', 'monthly_cycle_targets', 'task_templates', 'task_template_items', 'tasks',
             'pages', 'page_optimizations', 'keywords', 'ranking_snapshots', 'backlinks', 'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics', 'ga4_monthly_metrics',
@@ -49,15 +51,27 @@ class SchemaScopeTest extends TestCase
     public function test_projects_tables_match_the_milestone_three_columns(): void
     {
         $this->assertEqualsCanonicalizing([
-            'id', 'client_id', 'name', 'website_url', 'target_location', 'status', 'start_date',
+            'id', 'client_id', 'package_id', 'name', 'website_url', 'target_location', 'status', 'start_date',
             'end_date', 'primary_seo_user_id', 'notes', 'created_at', 'updated_at', 'deleted_at',
         ], Schema::getColumnListing('projects'));
-
-        // package_id arrives with the packages table in Milestone 4.
-        $this->assertFalse(Schema::hasColumn('projects', 'package_id'));
 
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_package_tables_match_the_milestone_four_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'name', 'description', 'is_active', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('packages'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'package_id', 'target_key', 'label', 'target_value', 'sort_order', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('package_targets'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'target_key', 'label', 'target_value', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('project_target_overrides'));
     }
 }

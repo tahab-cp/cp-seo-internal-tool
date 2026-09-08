@@ -4,7 +4,10 @@ namespace App\Filament\Resources\Projects\Schemas;
 
 use App\Filament\Resources\Clients\ClientResource;
 use App\Models\Project;
+use App\Services\MonthlyCycles\TargetResolver;
+use App\Support\Targets\ResolvedTarget;
 use Filament\Facades\Filament;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -46,6 +49,38 @@ class ProjectInfolist
                             ->label('Archived')
                             ->dateTime()
                             ->visible(fn (Project $record): bool => $record->trashed()),
+                    ]),
+                Section::make('Package & monthly targets')
+                    ->description('Package defaults with this project\'s overrides. Changes here affect future monthly cycles only.')
+                    ->components([
+                        TextEntry::make('package.name')
+                            ->label('Package')
+                            ->badge()
+                            ->color(fn (Project $record): string => $record->package?->is_active ? 'success' : 'warning')
+                            ->formatStateUsing(fn (string $state, Project $record): string => $record->package?->is_active
+                                ? $state
+                                : "{$state} (inactive)")
+                            ->placeholder('No package assigned'),
+                        RepeatableEntry::make('resolved_targets')
+                            ->hiddenLabel()
+                            ->state(fn (Project $record): array => app(TargetResolver::class)
+                                ->resolve($record)
+                                ->map(fn (ResolvedTarget $target): array => $target->toArray())
+                                ->all())
+                            ->visible(fn (Project $record): bool => $record->package_id !== null)
+                            ->columns(4)
+                            ->schema([
+                                TextEntry::make('label')
+                                    ->label('Target'),
+                                TextEntry::make('package_value')
+                                    ->label('Package default'),
+                                TextEntry::make('override_value')
+                                    ->label('Project override')
+                                    ->placeholder('—'),
+                                TextEntry::make('resolved_value')
+                                    ->label('Resolved monthly target')
+                                    ->weight('bold'),
+                            ]),
                     ]),
                 Section::make('Team')
                     ->columns(2)

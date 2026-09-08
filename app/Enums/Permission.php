@@ -27,6 +27,10 @@ enum Permission: string
     case UpdateProjects = 'projects.update';
     case ArchiveProjects = 'projects.archive';
     case AssignProjectTeam = 'projects.assign_team';
+    case AssignProjectPackage = 'projects.assign_package';
+    case ManageProjectTargets = 'projects.manage_targets';
+
+    case ManagePackages = 'packages.manage';
 
     public function label(): string
     {
@@ -46,6 +50,9 @@ enum Permission: string
             self::UpdateProjects => 'Edit projects and change their lifecycle',
             self::ArchiveProjects => 'Archive and restore projects',
             self::AssignProjectTeam => 'Assign project owners and team members',
+            self::AssignProjectPackage => 'Assign a package to a project',
+            self::ManageProjectTargets => 'Configure project target overrides',
+            self::ManagePackages => 'Manage packages and their targets (Settings)',
         };
     }
 }

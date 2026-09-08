@@ -44,6 +44,16 @@ class ProjectPolicy
         return $user->hasPermission(Permission::AssignProjectTeam);
     }
 
+    public function assignPackage(User $user, Project $project): bool
+    {
+        return $user->hasPermission(Permission::AssignProjectPackage);
+    }
+
+    public function manageTargets(User $user, Project $project): bool
+    {
+        return $user->hasPermission(Permission::ManageProjectTargets);
+    }
+
     /**
      * Archiving soft-deletes the project so its history survives.
      */

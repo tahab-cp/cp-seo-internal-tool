@@ -23,7 +23,7 @@ class ProjectsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['client', 'primarySeoUser']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['client', 'primarySeoUser', 'package']))
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')
@@ -44,6 +44,13 @@ class ProjectsTable
                     ->url(fn (Project $record): string => $record->website_url)
                     ->openUrlInNewTab()
                     ->limit(40),
+                TextColumn::make('package.name')
+                    ->label('Package')
+                    ->sortable()
+                    ->placeholder('No package')
+                    ->description(fn (Project $record): ?string => $record->package && ! $record->package->is_active
+                        ? 'Inactive package'
+                        : null),
                 TextColumn::make('primarySeoUser.name')
                     ->label('Primary SEO')
                     ->sortable()
@@ -63,6 +70,11 @@ class ProjectsTable
                 SelectFilter::make('client_id')
                     ->label('Client')
                     ->relationship('client', 'name')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('package_id')
+                    ->label('Package')
+                    ->relationship('package', 'name')
                     ->searchable()
                     ->preload(),
                 SelectFilter::make('primary_seo_user_id')

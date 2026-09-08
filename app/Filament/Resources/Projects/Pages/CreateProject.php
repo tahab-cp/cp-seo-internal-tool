@@ -32,8 +32,9 @@ class CreateProject extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         return app(CreateProjectAction::class)->handle(
-            Arr::except($data, ['team_member_ids']),
+            Arr::except($data, ['team_member_ids', 'target_overrides']),
             Arr::wrap($data['team_member_ids'] ?? []),
+            collect($data['target_overrides'] ?? [])->pluck('target_value', 'target_key')->all(),
         );
     }
 

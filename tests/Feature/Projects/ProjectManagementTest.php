@@ -11,6 +11,7 @@ use App\Filament\Resources\Projects\Pages\ListProjects;
 use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\Client;
+use App\Models\Package;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,12 +27,14 @@ class ProjectManagementTest extends TestCase
         $this->actingAs(User::factory()->superAdmin()->create());
 
         $client = Client::factory()->create();
+        $package = Package::factory()->withTargets()->create();
         $owner = User::factory()->seoExecutive()->create();
         [$alpha, $beta] = User::factory()->count(2)->seoExecutive()->create();
 
         Livewire::test(CreateProject::class)
             ->fillForm([
                 'client_id' => $client->id,
+                'package_id' => $package->id,
                 'name' => 'Casa Botanica',
                 'website_url' => 'https://casabotanica.example',
                 'status' => ProjectStatus::Onboarding->value,
@@ -48,6 +51,7 @@ class ProjectManagementTest extends TestCase
         $project = Project::query()->where('name', 'Casa Botanica')->firstOrFail();
 
         $this->assertTrue($project->client->is($client));
+        $this->assertTrue($project->package->is($package));
         $this->assertSame(ProjectStatus::Onboarding, $project->status);
         $this->assertSame('London', $project->target_location);
         $this->assertSame('2026-09-01', $project->start_date->toDateString());
@@ -65,6 +69,7 @@ class ProjectManagementTest extends TestCase
         Livewire::test(CreateProject::class)
             ->fillForm([
                 'client_id' => $client->id,
+                'package_id' => Package::factory()->create()->id,
                 'name' => 'Project B',
                 'website_url' => 'https://project-b.example',
                 'status' => ProjectStatus::Active->value,
@@ -114,6 +119,7 @@ class ProjectManagementTest extends TestCase
         Livewire::test(CreateProject::class)
             ->fillForm([
                 'client_id' => Client::factory()->create()->id,
+                'package_id' => Package::factory()->create()->id,
                 'name' => 'Dedupe',
                 'website_url' => 'https://dedupe.example',
                 'status' => ProjectStatus::Active->value,

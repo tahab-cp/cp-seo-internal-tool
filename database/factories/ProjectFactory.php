@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\ProjectStatus;
 use App\Models\Client;
+use App\Models\Package;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -29,6 +30,13 @@ class ProjectFactory extends Factory
             'primary_seo_user_id' => null,
             'notes' => fake()->optional()->sentence(),
         ];
+    }
+
+    public function withPackage(Package $package): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'package_id' => $package->getKey(),
+        ]);
     }
 
     public function forClient(Client $client): static
