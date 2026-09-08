@@ -121,6 +121,16 @@ class Project extends Model
     }
 
     /**
+     * Tracked keywords (project master data).
+     *
+     * @return HasMany<Keyword, $this>
+     */
+    public function keywords(): HasMany
+    {
+        return $this->hasMany(Keyword::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function primarySeoUser(): BelongsTo

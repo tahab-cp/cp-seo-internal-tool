@@ -169,8 +169,9 @@ class MonthlyCyclePageTest extends TestCase
             ->assertOk()
             ->assertSee('data-target-key="backlinks">50<', false)
             ->assertSee('data-target-key="blogs">8<', false)
-            ->assertDontSee('777')
-            ->assertDontSee('888');
+            // Live values must not appear as target cells (bare numbers could match ids in URLs).
+            ->assertDontSee('data-target-key="backlinks">777<', false)
+            ->assertDontSee('data-target-key="blogs">888<', false);
     }
 
     public function test_the_month_selector_switches_between_cycles(): void

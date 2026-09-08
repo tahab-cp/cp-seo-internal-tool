@@ -82,6 +82,23 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may maintain its keywords.
+     */
+    public function manageKeywords(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
+     * Anyone who can see a project may record rankings; locked cycles are
+     * enforced by RankingSnapshotPolicy and the ranking actions.
+     */
+    public function recordRankings(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
      * Generate onboarding tasks from a task template (Admin / Manager).
      * Callable with the class name (no project) to gate the create form.
      */

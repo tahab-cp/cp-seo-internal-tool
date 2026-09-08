@@ -21,6 +21,7 @@ class SchemaScopeTest extends TestCase
             'monthly_cycles', 'monthly_cycle_targets',
             'task_templates', 'task_template_items', 'tasks',
             'pages', 'page_optimizations',
+            'keywords', 'ranking_snapshots',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -29,7 +30,7 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'keywords', 'ranking_snapshots', 'backlinks', 'content_items',
+            'backlinks', 'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics', 'ga4_monthly_metrics',
             'ga4_country_metrics', 'authority_metrics', 'monthly_notes', 'project_report_sections',
             'monthly_reports', 'monthly_report_sections',
@@ -60,6 +61,20 @@ class SchemaScopeTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_keyword_tables_match_the_milestone_eight_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'keyword', 'keyword_normalized', 'target_page_id', 'keyword_role',
+            'search_volume', 'keyword_difficulty', 'search_intent', 'location', 'location_normalized',
+            'is_branded', 'status', 'created_at', 'updated_at', 'deleted_at',
+        ], Schema::getColumnListing('keywords'));
+
+        // No movement / previous_position columns: movement is derived.
+        $this->assertEqualsCanonicalizing([
+            'id', 'keyword_id', 'monthly_cycle_id', 'checked_at', 'position', 'ranking_url', 'source', 'created_at',
+        ], Schema::getColumnListing('ranking_snapshots'));
     }
 
     public function test_page_tables_match_the_milestone_seven_columns(): void

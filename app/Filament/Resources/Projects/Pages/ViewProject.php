@@ -28,6 +28,11 @@ class ViewProject extends ViewRecord
                 ->icon(Heroicon::OutlinedDocumentText)
                 ->color('gray')
                 ->url(fn (Project $record): string => ProjectResource::getUrl('pages', ['record' => $record])),
+            Action::make('keywords')
+                ->label('Keywords')
+                ->icon(Heroicon::OutlinedMagnifyingGlass)
+                ->color('gray')
+                ->url(fn (Project $record): string => ProjectResource::getUrl('keywords', ['record' => $record])),
             Action::make('monthlyCycles')
                 ->label('Monthly cycles')
                 ->icon(Heroicon::OutlinedCalendarDays)

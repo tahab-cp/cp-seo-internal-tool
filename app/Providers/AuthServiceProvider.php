@@ -4,20 +4,24 @@ namespace App\Providers;
 
 use App\Enums\Permission;
 use App\Models\Client;
+use App\Models\Keyword;
 use App\Models\MonthlyCycle;
 use App\Models\Package;
 use App\Models\Page;
 use App\Models\PageOptimization;
 use App\Models\Project;
+use App\Models\RankingSnapshot;
 use App\Models\Task;
 use App\Models\TaskTemplate;
 use App\Models\User;
 use App\Policies\ClientPolicy;
+use App\Policies\KeywordPolicy;
 use App\Policies\MonthlyCyclePolicy;
 use App\Policies\PackagePolicy;
 use App\Policies\PageOptimizationPolicy;
 use App\Policies\PagePolicy;
 use App\Policies\ProjectPolicy;
+use App\Policies\RankingSnapshotPolicy;
 use App\Policies\TaskPolicy;
 use App\Policies\TaskTemplatePolicy;
 use App\Policies\UserPolicy;
@@ -41,6 +45,8 @@ class AuthServiceProvider extends ServiceProvider
         Task::class => TaskPolicy::class,
         Page::class => PagePolicy::class,
         PageOptimization::class => PageOptimizationPolicy::class,
+        Keyword::class => KeywordPolicy::class,
+        RankingSnapshot::class => RankingSnapshotPolicy::class,
     ];
 
     public function boot(): void

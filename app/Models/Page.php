@@ -64,6 +64,16 @@ class Page extends Model
             ->orderByDesc('id');
     }
 
+    /**
+     * Keywords targeting this page.
+     *
+     * @return HasMany<Keyword, $this>
+     */
+    public function keywords(): HasMany
+    {
+        return $this->hasMany(Keyword::class, 'target_page_id');
+    }
+
     public function isRemoved(): bool
     {
         return $this->status === PageStatus::Removed;

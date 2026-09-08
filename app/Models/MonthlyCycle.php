@@ -93,6 +93,16 @@ class MonthlyCycle extends Model
         return $this->hasMany(PageOptimization::class);
     }
 
+    /**
+     * Ranking observations reported in this cycle.
+     *
+     * @return HasMany<RankingSnapshot, $this>
+     */
+    public function rankingSnapshots(): HasMany
+    {
+        return $this->hasMany(RankingSnapshot::class);
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);
