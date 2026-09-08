@@ -19,6 +19,7 @@ class SchemaScopeTest extends TestCase
             'users', 'roles', 'role_user', 'clients', 'projects', 'project_user',
             'packages', 'package_targets', 'project_target_overrides',
             'monthly_cycles', 'monthly_cycle_targets',
+            'task_templates', 'task_template_items', 'tasks',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -27,7 +28,6 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'task_templates', 'task_template_items', 'tasks',
             'pages', 'page_optimizations', 'keywords', 'ranking_snapshots', 'backlinks', 'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics', 'ga4_monthly_metrics',
             'ga4_country_metrics', 'authority_metrics', 'monthly_notes', 'project_report_sections',
@@ -59,6 +59,24 @@ class SchemaScopeTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_task_tables_match_the_milestone_six_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'name', 'description', 'is_active', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('task_templates'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'task_template_id', 'title', 'description', 'category', 'phase', 'default_due_days',
+            'sort_order', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('task_template_items'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'monthly_cycle_id', 'task_template_item_id', 'assigned_user_id', 'created_by',
+            'title', 'description', 'category', 'status', 'priority', 'due_date', 'completed_at',
+            'created_at', 'updated_at', 'deleted_at',
+        ], Schema::getColumnListing('tasks'));
     }
 
     public function test_monthly_cycle_tables_match_the_milestone_five_columns(): void

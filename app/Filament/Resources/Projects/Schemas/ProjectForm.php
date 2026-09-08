@@ -6,6 +6,7 @@ use App\Enums\ProjectStatus;
 use App\Models\Package;
 use App\Models\PackageTarget;
 use App\Models\Project;
+use App\Models\TaskTemplate;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
@@ -13,6 +14,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -161,6 +163,26 @@ class ProjectForm
                             ])
                             ->disabled(fn (?Project $record): bool => ! static::canAssignTeam($record))
                             ->dehydrated(fn (?Project $record): bool => static::canAssignTeam($record)),
+                    ]),
+                Section::make('Onboarding')
+                    ->description('Optionally generate the onboarding checklist from a task template. Generated tasks are assigned to the primary SEO owner when one is set. This runs once at creation only.')
+                    ->columns(2)
+                    ->visible(fn (string $operation): bool => $operation === 'create'
+                        && Filament::auth()->user()?->can('generateOnboarding', Project::class) === true)
+                    ->components([
+                        Toggle::make('generate_onboarding')
+                            ->label('Generate onboarding checklist')
+                            ->default(false)
+                            ->inline(false)
+                            ->live(),
+                        Select::make('onboarding_template_id')
+                            ->label('Onboarding template')
+                            ->options(fn (): array => TaskTemplate::query()->active()->orderBy('name')->pluck('name', 'id')->all())
+                            ->searchable()
+                            ->preload()
+                            ->visible(fn (Get $get): bool => (bool) $get('generate_onboarding'))
+                            ->required(fn (Get $get): bool => (bool) $get('generate_onboarding'))
+                            ->rule(Rule::exists('task_templates', 'id')->where('is_active', true)),
                     ]),
                 Section::make('Internal notes')
                     ->components([

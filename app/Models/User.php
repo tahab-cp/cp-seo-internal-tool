@@ -87,6 +87,16 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Tasks assigned to this user (any project).
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function assignedTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'assigned_user_id');
+    }
+
+    /**
      * Every project this user may see, according to their role.
      *
      * @return Builder<Project>

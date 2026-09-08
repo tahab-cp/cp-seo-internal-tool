@@ -63,6 +63,28 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may work its tasks (create, edit, status).
+     * Locked monthly cycles are enforced by TaskPolicy and the task actions.
+     */
+    public function manageTasks(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
+     * Generate onboarding tasks from a task template (Admin / Manager).
+     * Callable with the class name (no project) to gate the create form.
+     */
+    public function generateOnboarding(User $user, ?Project $project = null): bool
+    {
+        if (! $user->hasPermission(Permission::GenerateOnboardingTasks)) {
+            return false;
+        }
+
+        return $project === null || $this->view($user, $project);
+    }
+
+    /**
      * Archiving soft-deletes the project so its history survives.
      */
     public function archive(User $user, Project $project): bool

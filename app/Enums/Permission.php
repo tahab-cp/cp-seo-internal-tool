@@ -34,6 +34,9 @@ enum Permission: string
 
     case EnsureMonthlyCycles = 'monthly_cycles.ensure';
 
+    case ManageTaskTemplates = 'task_templates.manage';
+    case GenerateOnboardingTasks = 'projects.generate_onboarding';
+
     public function label(): string
     {
         return match ($this) {
@@ -56,6 +59,8 @@ enum Permission: string
             self::ManageProjectTargets => 'Configure project target overrides',
             self::ManagePackages => 'Manage packages and their targets (Settings)',
             self::EnsureMonthlyCycles => 'Manually create missing monthly cycles',
+            self::ManageTaskTemplates => 'Manage onboarding task templates (Settings)',
+            self::GenerateOnboardingTasks => 'Generate onboarding tasks for a project',
         };
     }
 }

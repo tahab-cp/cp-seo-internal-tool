@@ -73,6 +73,16 @@ class MonthlyCycle extends Model
         return $this->hasMany(MonthlyCycleTarget::class)->orderBy('id');
     }
 
+    /**
+     * Monthly tasks attached to this cycle.
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);

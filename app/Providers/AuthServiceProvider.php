@@ -7,11 +7,15 @@ use App\Models\Client;
 use App\Models\MonthlyCycle;
 use App\Models\Package;
 use App\Models\Project;
+use App\Models\Task;
+use App\Models\TaskTemplate;
 use App\Models\User;
 use App\Policies\ClientPolicy;
 use App\Policies\MonthlyCyclePolicy;
 use App\Policies\PackagePolicy;
 use App\Policies\ProjectPolicy;
+use App\Policies\TaskPolicy;
+use App\Policies\TaskTemplatePolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +33,8 @@ class AuthServiceProvider extends ServiceProvider
         Project::class => ProjectPolicy::class,
         Package::class => PackagePolicy::class,
         MonthlyCycle::class => MonthlyCyclePolicy::class,
+        TaskTemplate::class => TaskTemplatePolicy::class,
+        Task::class => TaskPolicy::class,
     ];
 
     public function boot(): void

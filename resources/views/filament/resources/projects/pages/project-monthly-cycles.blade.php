@@ -51,6 +51,17 @@
                 </div>
             </dl>
 
+            <div class="mt-4">
+                <x-filament::button
+                    tag="a"
+                    size="sm"
+                    color="gray"
+                    href="{{ \App\Filament\Resources\Projects\ProjectResource::getUrl('tasks', ['record' => $this->getRecord(), 'cycle' => $cycle->getKey()]) }}"
+                >
+                    Tasks for {{ $cycle->periodLabel() }}
+                </x-filament::button>
+            </div>
+
             <h3 class="mt-6 text-base font-semibold">Monthly targets</h3>
             <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
                 Snapshotted when this cycle was created. Later package or override changes do not alter these values.

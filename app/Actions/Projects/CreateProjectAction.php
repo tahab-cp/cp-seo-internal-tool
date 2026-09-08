@@ -3,10 +3,14 @@
 namespace App\Actions\Projects;
 
 use App\Actions\MonthlyCycles\EnsureMonthlyCycleAction;
+use App\Actions\Tasks\GenerateOnboardingTasksAction;
 use App\Enums\ProjectStatus;
 use App\Models\Project;
+use App\Models\TaskTemplate;
+use App\Models\User;
 use App\Services\ActiveUserGuard;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class CreateProjectAction
 {
@@ -14,6 +18,7 @@ class CreateProjectAction
         protected SyncProjectTeamAction $syncProjectTeam,
         protected ChangeProjectPackageAction $changeProjectPackage,
         protected SyncProjectTargetOverridesAction $syncTargetOverrides,
+        protected GenerateOnboardingTasksAction $generateOnboardingTasks,
         protected EnsureMonthlyCycleAction $ensureMonthlyCycle,
         protected ActiveUserGuard $activeUsers,
     ) {}
@@ -25,22 +30,26 @@ class CreateProjectAction
      *   2. attach the team
      *   3. assign the package
      *   4. apply intentional target overrides
-     *   5. ensure the current monthly cycle (ACTIVE projects only)
+     *   5. optionally generate the onboarding checklist (after the owner,
+     *      package and overrides are final so assignment is correct)
+     *   6. ensure the current monthly cycle (ACTIVE projects only)
      *
-     * The cycle is created last so its target snapshot reflects the final
-     * package/override configuration. Onboarding, paused, completed and
-     * cancelled projects do not receive a cycle automatically.
-     *
-     * package_id may be null for legacy/migrated records; the Filament form
-     * requires a package for projects created through the application.
+     * Any failure, including onboarding generation, rolls everything back.
      *
      * @param  array<string, mixed>  $attributes
      * @param  list<int|string>  $teamMemberIds
      * @param  array<string, int|string>  $targetOverrides  target_key => value
+     * @param  TaskTemplate|null  $onboardingTemplate  active template to generate tasks from
+     * @param  User|null  $creator  recorded as the tasks' creator; defaults to the authenticated user
      */
-    public function handle(array $attributes, array $teamMemberIds = [], array $targetOverrides = []): Project
-    {
-        return DB::transaction(function () use ($attributes, $teamMemberIds, $targetOverrides): Project {
+    public function handle(
+        array $attributes,
+        array $teamMemberIds = [],
+        array $targetOverrides = [],
+        ?TaskTemplate $onboardingTemplate = null,
+        ?User $creator = null,
+    ): Project {
+        return DB::transaction(function () use ($attributes, $teamMemberIds, $targetOverrides, $onboardingTemplate, $creator): Project {
             $this->activeUsers->ensureActive([$attributes['primary_seo_user_id'] ?? null], 'the primary SEO owner');
 
             $project = Project::query()->create([
@@ -61,6 +70,16 @@ class CreateProjectAction
 
             if ($targetOverrides !== []) {
                 $project = $this->syncTargetOverrides->handle($project, $targetOverrides);
+            }
+
+            if ($onboardingTemplate !== null) {
+                $creator ??= auth()->user();
+
+                if (! $creator instanceof User) {
+                    throw new InvalidArgumentException('Onboarding generation needs a creator user.');
+                }
+
+                $this->generateOnboardingTasks->handle($project, $onboardingTemplate, $creator);
             }
 
             if ($project->status === ProjectStatus::Active) {
