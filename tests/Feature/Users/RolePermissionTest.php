@@ -33,6 +33,11 @@ class RolePermissionTest extends TestCase
             Permission::CreateClients,
             Permission::UpdateClients,
             Permission::ArchiveClients,
+            Permission::ViewAllProjects,
+            Permission::CreateProjects,
+            Permission::UpdateProjects,
+            Permission::ArchiveProjects,
+            Permission::AssignProjectTeam,
         ], UserRole::SeoManager->permissions());
 
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::ViewUsers));
@@ -44,7 +49,9 @@ class RolePermissionTest extends TestCase
 
     public function test_seo_executive_holds_no_user_management_permissions(): void
     {
-        $this->assertSame([], UserRole::SeoExecutive->permissions());
+        $this->assertSame([Permission::ViewAssignedProjects], UserRole::SeoExecutive->permissions());
+        $this->assertFalse(UserRole::SeoExecutive->hasPermission(Permission::ViewAllProjects));
+        $this->assertFalse(UserRole::SeoExecutive->hasPermission(Permission::CreateProjects));
     }
 
     public function test_the_role_seeder_creates_each_system_role_once(): void

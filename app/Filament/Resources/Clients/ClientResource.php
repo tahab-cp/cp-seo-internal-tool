@@ -6,6 +6,7 @@ use App\Filament\Resources\Clients\Pages\CreateClient;
 use App\Filament\Resources\Clients\Pages\EditClient;
 use App\Filament\Resources\Clients\Pages\ListClients;
 use App\Filament\Resources\Clients\Pages\ViewClient;
+use App\Filament\Resources\Clients\RelationManagers\ProjectsRelationManager;
 use App\Filament\Resources\Clients\Schemas\ClientForm;
 use App\Filament\Resources\Clients\Schemas\ClientInfolist;
 use App\Filament\Resources\Clients\Tables\ClientsTable;
@@ -51,7 +52,9 @@ class ClientResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            ProjectsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

@@ -21,6 +21,13 @@ enum Permission: string
     case UpdateClients = 'clients.update';
     case ArchiveClients = 'clients.archive';
 
+    case ViewAllProjects = 'projects.view_all';
+    case ViewAssignedProjects = 'projects.view_assigned';
+    case CreateProjects = 'projects.create';
+    case UpdateProjects = 'projects.update';
+    case ArchiveProjects = 'projects.archive';
+    case AssignProjectTeam = 'projects.assign_team';
+
     public function label(): string
     {
         return match ($this) {
@@ -33,6 +40,12 @@ enum Permission: string
             self::CreateClients => 'Create clients',
             self::UpdateClients => 'Edit clients',
             self::ArchiveClients => 'Archive clients',
+            self::ViewAllProjects => 'View every project',
+            self::ViewAssignedProjects => 'View assigned projects only',
+            self::CreateProjects => 'Create projects',
+            self::UpdateProjects => 'Edit projects and change their lifecycle',
+            self::ArchiveProjects => 'Archive and restore projects',
+            self::AssignProjectTeam => 'Assign project owners and team members',
         };
     }
 }

@@ -7,8 +7,10 @@ use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -60,6 +62,47 @@ class User extends Authenticatable implements FilamentUser
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class)->withTimestamps();
+    }
+
+    /**
+     * Projects where this user is the primary SEO owner.
+     *
+     * @return HasMany<Project, $this>
+     */
+    public function primaryProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'primary_seo_user_id');
+    }
+
+    /**
+     * Projects where this user is an additional team member.
+     *
+     * @return BelongsToMany<Project, $this>
+     */
+    public function teamProjects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class)
+            ->withPivot('project_role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Every project this user may see, according to their role.
+     *
+     * @return Builder<Project>
+     */
+    public function accessibleProjects(): Builder
+    {
+        return Project::query()->accessibleBy($this);
+    }
+
+    /**
+     * @param  Builder<User>  $query
+     * @return Builder<User>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
     }
 
     /**
