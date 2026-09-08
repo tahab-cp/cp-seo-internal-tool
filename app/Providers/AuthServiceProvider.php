@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Enums\Permission;
 use App\Models\Backlink;
 use App\Models\Client;
+use App\Models\ContentItem;
 use App\Models\Keyword;
 use App\Models\MonthlyCycle;
 use App\Models\Package;
@@ -17,6 +18,7 @@ use App\Models\TaskTemplate;
 use App\Models\User;
 use App\Policies\BacklinkPolicy;
 use App\Policies\ClientPolicy;
+use App\Policies\ContentItemPolicy;
 use App\Policies\KeywordPolicy;
 use App\Policies\MonthlyCyclePolicy;
 use App\Policies\PackagePolicy;
@@ -50,6 +52,7 @@ class AuthServiceProvider extends ServiceProvider
         Keyword::class => KeywordPolicy::class,
         RankingSnapshot::class => RankingSnapshotPolicy::class,
         Backlink::class => BacklinkPolicy::class,
+        ContentItem::class => ContentItemPolicy::class,
     ];
 
     public function boot(): void

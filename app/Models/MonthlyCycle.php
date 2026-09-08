@@ -113,6 +113,16 @@ class MonthlyCycle extends Model
         return $this->hasMany(Backlink::class);
     }
 
+    /**
+     * Content work items reported in this cycle.
+     *
+     * @return HasMany<ContentItem, $this>
+     */
+    public function contentItems(): HasMany
+    {
+        return $this->hasMany(ContentItem::class);
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);

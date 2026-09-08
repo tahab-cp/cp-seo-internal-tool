@@ -141,6 +141,16 @@ class Project extends Model
     }
 
     /**
+     * Content work items, project-level and monthly.
+     *
+     * @return HasMany<ContentItem, $this>
+     */
+    public function contentItems(): HasMany
+    {
+        return $this->hasMany(ContentItem::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function primarySeoUser(): BelongsTo

@@ -22,7 +22,7 @@ class SchemaScopeTest extends TestCase
             'task_templates', 'task_template_items', 'tasks',
             'pages', 'page_optimizations',
             'keywords', 'ranking_snapshots',
-            'backlinks',
+            'backlinks', 'content_items',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -31,7 +31,6 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'content_items',
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics', 'ga4_monthly_metrics',
             'ga4_country_metrics', 'authority_metrics', 'monthly_notes', 'project_report_sections',
             'monthly_reports', 'monthly_report_sections',
@@ -62,6 +61,15 @@ class SchemaScopeTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'id', 'project_id', 'user_id', 'project_role', 'created_at', 'updated_at',
         ], Schema::getColumnListing('project_user'));
+    }
+
+    public function test_content_items_table_matches_the_milestone_ten_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'monthly_cycle_id', 'assigned_user_id', 'target_keyword_id', 'title', 'content_type',
+            'status', 'planned_publish_date', 'published_at', 'published_url', 'notes',
+            'created_at', 'updated_at', 'deleted_at',
+        ], Schema::getColumnListing('content_items'));
     }
 
     public function test_backlinks_table_matches_the_milestone_nine_columns(): void

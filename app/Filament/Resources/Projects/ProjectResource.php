@@ -7,6 +7,7 @@ use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
 use App\Filament\Resources\Projects\Pages\ProjectBacklinks;
+use App\Filament\Resources\Projects\Pages\ProjectContent;
 use App\Filament\Resources\Projects\Pages\ProjectKeywordDetail;
 use App\Filament\Resources\Projects\Pages\ProjectKeywords;
 use App\Filament\Resources\Projects\Pages\ProjectMonthlyCycles;
@@ -97,6 +98,7 @@ class ProjectResource extends Resource
             'keywords' => ProjectKeywords::route('/{record}/keywords'),
             'keyword' => ProjectKeywordDetail::route('/{record}/keywords/{keyword}'),
             'backlinks' => ProjectBacklinks::route('/{record}/backlinks'),
+            'content' => ProjectContent::route('/{record}/content'),
         ];
     }
 

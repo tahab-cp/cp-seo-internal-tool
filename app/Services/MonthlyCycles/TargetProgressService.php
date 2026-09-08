@@ -23,6 +23,8 @@ class TargetProgressService
 
     public const GUEST_POSTS = 'guest_posts';
 
+    public const BLOGS = 'blogs';
+
     /**
      * Distinct pages with at least one optimisation event in the cycle.
      * A page optimised twice in the month counts once.
@@ -46,6 +48,15 @@ class TargetProgressService
     public function guestPostsActual(MonthlyCycle $cycle): int
     {
         return $cycle->backlinks()->live()->guestPosts()->count();
+    }
+
+    /**
+     * Published blog-type content items attributed to the cycle.
+     * Soft-deleted items are excluded by the model's global scope.
+     */
+    public function blogsActual(MonthlyCycle $cycle): int
+    {
+        return $cycle->contentItems()->publishedBlogs()->count();
     }
 
     /**
@@ -79,6 +90,7 @@ class TargetProgressService
             self::PAGES_OPTIMIZED => $this->pagesOptimisedActual($cycle),
             self::BACKLINKS => $this->backlinksActual($cycle),
             self::GUEST_POSTS => $this->guestPostsActual($cycle),
+            self::BLOGS => $this->blogsActual($cycle),
             default => null,
         };
     }
@@ -110,12 +122,18 @@ class TargetProgressService
         return $this->progressFor($cycle, self::GUEST_POSTS);
     }
 
+    public function blogs(MonthlyCycle $cycle): TargetProgress
+    {
+        return $this->progressFor($cycle, self::BLOGS);
+    }
+
     protected function defaultLabel(string $targetKey): string
     {
         return match ($targetKey) {
             self::PAGES_OPTIMIZED => 'Pages Optimised',
             self::BACKLINKS => 'Backlinks',
             self::GUEST_POSTS => 'Guest Posts',
+            self::BLOGS => 'Blogs',
             default => ucwords(str_replace('_', ' ', $targetKey)),
         };
     }

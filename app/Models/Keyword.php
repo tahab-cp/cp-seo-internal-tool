@@ -98,6 +98,16 @@ class Keyword extends Model
         return $this->hasOne(RankingSnapshot::class)->latestOfMany('checked_at');
     }
 
+    /**
+     * Content items targeting this keyword.
+     *
+     * @return HasMany<ContentItem, $this>
+     */
+    public function contentItems(): HasMany
+    {
+        return $this->hasMany(ContentItem::class, 'target_keyword_id');
+    }
+
     public function isArchived(): bool
     {
         return $this->status === KeywordStatus::Archived;

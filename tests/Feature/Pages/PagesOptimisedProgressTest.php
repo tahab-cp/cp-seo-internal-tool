@@ -145,12 +145,19 @@ class PagesOptimisedProgressTest extends TestCase
 
     public function test_other_target_keys_have_no_actual_yet(): void
     {
+        // Blogs gained a derived actual in Milestone 10 (published blog content).
         $blogs = $this->progress->progressFor($this->september, 'blogs');
 
-        $this->assertNull($blogs->actual);
+        $this->assertSame(0, $blogs->actual);
         $this->assertSame(4, $blogs->target);
-        $this->assertNull($blogs->percentage());
-        $this->assertSame('— / 4', $blogs->format());
+        $this->assertSame('0 / 4', $blogs->format());
+
+        // Keys without a derivation still report no actual rather than a fake zero.
+        $unknown = $this->progress->progressFor($this->september, 'site_audits');
+
+        $this->assertNull($unknown->actual);
+        $this->assertNull($unknown->target);
+        $this->assertNull($unknown->percentage());
     }
 
     public function test_task_completion_has_no_effect_on_pages_optimised(): void

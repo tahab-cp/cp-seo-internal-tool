@@ -108,6 +108,15 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may plan and track its content; locked
+     * cycles are enforced by ContentItemPolicy and the content actions.
+     */
+    public function manageContent(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
      * Generate onboarding tasks from a task template (Admin / Manager).
      * Callable with the class name (no project) to gate the create form.
      */
