@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Enums\Permission;
+use App\Models\Client;
 use App\Models\User;
+use App\Policies\ClientPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -17,6 +19,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected array $policies = [
         User::class => UserPolicy::class,
+        Client::class => ClientPolicy::class,
     ];
 
     public function boot(): void

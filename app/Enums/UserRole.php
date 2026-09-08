@@ -44,6 +44,8 @@ enum UserRole: string implements HasColor, HasLabel
     /**
      * User administration is reserved for Super Admins. Managers get team
      * visibility through the dedicated Team functionality in a later milestone.
+     * Executives reach clients only through their assigned projects (Milestone 3),
+     * never through the global client administration area.
      *
      * @return list<Permission>
      */
@@ -51,7 +53,12 @@ enum UserRole: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::SuperAdmin => Permission::cases(),
-            self::SeoManager => [],
+            self::SeoManager => [
+                Permission::ViewClients,
+                Permission::CreateClients,
+                Permission::UpdateClients,
+                Permission::ArchiveClients,
+            ],
             self::SeoExecutive => [],
         };
     }

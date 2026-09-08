@@ -16,6 +16,11 @@ enum Permission: string
     case ActivateUsers = 'users.activate';
     case AssignRoles = 'roles.assign';
 
+    case ViewClients = 'clients.view';
+    case CreateClients = 'clients.create';
+    case UpdateClients = 'clients.update';
+    case ArchiveClients = 'clients.archive';
+
     public function label(): string
     {
         return match ($this) {
@@ -24,6 +29,10 @@ enum Permission: string
             self::UpdateUsers => 'Edit users',
             self::ActivateUsers => 'Activate and deactivate users',
             self::AssignRoles => 'Assign system roles to users',
+            self::ViewClients => 'View clients',
+            self::CreateClients => 'Create clients',
+            self::UpdateClients => 'Edit clients',
+            self::ArchiveClients => 'Archive clients',
         };
     }
 }

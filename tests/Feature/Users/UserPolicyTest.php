@@ -55,9 +55,23 @@ class UserPolicyTest extends TestCase
         $this->assertFalse($manager->can('activate', $target));
         $this->assertFalse($manager->can('deactivate', $target));
 
-        foreach (Permission::cases() as $permission) {
+        foreach ($this->userAdministrationPermissions() as $permission) {
             $this->assertFalse($manager->can($permission->value), $permission->value);
         }
+    }
+
+    /**
+     * @return list<Permission>
+     */
+    protected function userAdministrationPermissions(): array
+    {
+        return [
+            Permission::ViewUsers,
+            Permission::CreateUsers,
+            Permission::UpdateUsers,
+            Permission::ActivateUsers,
+            Permission::AssignRoles,
+        ];
     }
 
     public function test_seo_executive_has_no_user_management_abilities(): void
@@ -72,7 +86,7 @@ class UserPolicyTest extends TestCase
         $this->assertFalse($executive->can('assignRole', $target));
         $this->assertFalse($executive->can('deactivate', $target));
 
-        foreach (Permission::cases() as $permission) {
+        foreach ($this->userAdministrationPermissions() as $permission) {
             $this->assertFalse($executive->can($permission->value), $permission->value);
         }
     }

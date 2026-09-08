@@ -26,10 +26,19 @@ class RolePermissionTest extends TestCase
         $this->assertSame(Permission::cases(), UserRole::SuperAdmin->permissions());
     }
 
-    public function test_seo_manager_holds_no_user_management_permissions(): void
+    public function test_seo_manager_holds_client_permissions_but_no_user_management_permissions(): void
     {
-        $this->assertSame([], UserRole::SeoManager->permissions());
+        $this->assertSame([
+            Permission::ViewClients,
+            Permission::CreateClients,
+            Permission::UpdateClients,
+            Permission::ArchiveClients,
+        ], UserRole::SeoManager->permissions());
+
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::ViewUsers));
+        $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::CreateUsers));
+        $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::UpdateUsers));
+        $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::ActivateUsers));
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::AssignRoles));
     }
 
