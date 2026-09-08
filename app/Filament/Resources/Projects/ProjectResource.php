@@ -6,6 +6,7 @@ use App\Enums\Permission;
 use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
+use App\Filament\Resources\Projects\Pages\ProjectBacklinks;
 use App\Filament\Resources\Projects\Pages\ProjectKeywordDetail;
 use App\Filament\Resources\Projects\Pages\ProjectKeywords;
 use App\Filament\Resources\Projects\Pages\ProjectMonthlyCycles;
@@ -95,6 +96,7 @@ class ProjectResource extends Resource
             'page' => ProjectPageDetail::route('/{record}/pages/{page}'),
             'keywords' => ProjectKeywords::route('/{record}/keywords'),
             'keyword' => ProjectKeywordDetail::route('/{record}/keywords/{keyword}'),
+            'backlinks' => ProjectBacklinks::route('/{record}/backlinks'),
         ];
     }
 

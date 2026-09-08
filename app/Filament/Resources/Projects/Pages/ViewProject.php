@@ -33,6 +33,11 @@ class ViewProject extends ViewRecord
                 ->icon(Heroicon::OutlinedMagnifyingGlass)
                 ->color('gray')
                 ->url(fn (Project $record): string => ProjectResource::getUrl('keywords', ['record' => $record])),
+            Action::make('backlinks')
+                ->label('Backlinks')
+                ->icon(Heroicon::OutlinedLink)
+                ->color('gray')
+                ->url(fn (Project $record): string => ProjectResource::getUrl('backlinks', ['record' => $record])),
             Action::make('monthlyCycles')
                 ->label('Monthly cycles')
                 ->icon(Heroicon::OutlinedCalendarDays)

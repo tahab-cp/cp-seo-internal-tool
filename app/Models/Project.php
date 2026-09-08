@@ -131,6 +131,16 @@ class Project extends Model
     }
 
     /**
+     * Link-building records across all months.
+     *
+     * @return HasMany<Backlink, $this>
+     */
+    public function backlinks(): HasMany
+    {
+        return $this->hasMany(Backlink::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function primarySeoUser(): BelongsTo

@@ -103,6 +103,16 @@ class MonthlyCycle extends Model
         return $this->hasMany(RankingSnapshot::class);
     }
 
+    /**
+     * Link-building records reported in this cycle.
+     *
+     * @return HasMany<Backlink, $this>
+     */
+    public function backlinks(): HasMany
+    {
+        return $this->hasMany(Backlink::class);
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);

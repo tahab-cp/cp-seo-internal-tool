@@ -40,6 +40,29 @@ final readonly class TargetProgress
     }
 
     /**
+     * Target minus actual, floored at zero; null when there is no target or
+     * no actual to compare.
+     */
+    public function remaining(): ?int
+    {
+        if ($this->actual === null || $this->target === null) {
+            return null;
+        }
+
+        return max(0, $this->target - $this->actual);
+    }
+
+    public function isOverTarget(): bool
+    {
+        return $this->actual !== null && $this->target !== null && $this->actual > $this->target;
+    }
+
+    public function isComplete(): bool
+    {
+        return $this->actual !== null && $this->target !== null && $this->actual >= $this->target;
+    }
+
+    /**
      * e.g. "5 / 8" or "5 / No target".
      */
     public function format(): string
@@ -48,7 +71,23 @@ final readonly class TargetProgress
     }
 
     /**
-     * @return array{target_key: string, label: string, actual: int|null, target: int|null, percentage: int|null}
+     * e.g. "18 remaining", "Target met", "5 over target"; null without a target.
+     */
+    public function remainingLabel(): ?string
+    {
+        if ($this->remaining() === null) {
+            return null;
+        }
+
+        if ($this->isOverTarget()) {
+            return ($this->actual - $this->target).' over target';
+        }
+
+        return $this->remaining() === 0 ? 'Target met' : $this->remaining().' remaining';
+    }
+
+    /**
+     * @return array{target_key: string, label: string, actual: int|null, target: int|null, percentage: int|null, remaining: int|null}
      */
     public function toArray(): array
     {
@@ -58,6 +97,7 @@ final readonly class TargetProgress
             'actual' => $this->actual,
             'target' => $this->target,
             'percentage' => $this->percentage(),
+            'remaining' => $this->remaining(),
         ];
     }
 }

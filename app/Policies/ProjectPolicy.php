@@ -99,6 +99,15 @@ class ProjectPolicy
     }
 
     /**
+     * Anyone who can see a project may record its link-building work;
+     * locked cycles are enforced by BacklinkPolicy and the backlink actions.
+     */
+    public function manageBacklinks(User $user, Project $project): bool
+    {
+        return $this->view($user, $project);
+    }
+
+    /**
      * Generate onboarding tasks from a task template (Admin / Manager).
      * Callable with the class name (no project) to gate the create form.
      */
