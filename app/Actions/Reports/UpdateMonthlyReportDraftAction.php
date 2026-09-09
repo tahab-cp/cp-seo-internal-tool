@@ -12,9 +12,11 @@ class UpdateMonthlyReportDraftAction
     public const SUMMARY_MAX = 10000;
 
     /**
-     * Minimal draft editing for Milestone 12: the executive summary. Only
-     * a draft report in an unlocked month may change. Status transitions
-     * are not exposed here; they arrive with the Milestone 13 workflow.
+     * Edit the report's client-facing narrative (the executive summary).
+     * Allowed while the report is Draft or Ready for Review and the month
+     * is unlocked; a final report is immutable. Status transitions are
+     * never accepted here: they belong to MarkReportReadyAction and
+     * FinalizeMonthlyReportAction.
      *
      * @param  array<string, mixed>  $attributes  executive_summary
      */
@@ -25,8 +27,8 @@ class UpdateMonthlyReportDraftAction
                 throw LockedMonthlyCycleException::for($report->monthlyCycle, 'edit its report');
             }
 
-            if (! $report->isDraft()) {
-                throw new InvalidArgumentException('Only a draft report can be edited.');
+            if ($report->isFinal()) {
+                throw new InvalidArgumentException('A final report cannot be edited.');
             }
 
             if (array_key_exists('executive_summary', $attributes)) {

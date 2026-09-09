@@ -39,6 +39,8 @@ enum Permission: string
 
     case ManageReportSections = 'projects.manage_report_sections';
 
+    case FinalizeReports = 'reports.finalize';
+
     public function label(): string
     {
         return match ($this) {
@@ -64,6 +66,7 @@ enum Permission: string
             self::ManageTaskTemplates => 'Manage onboarding task templates (Settings)',
             self::GenerateOnboardingTasks => 'Generate onboarding tasks for a project',
             self::ManageReportSections => 'Configure a project\'s report sections (future reports)',
+            self::FinalizeReports => 'Review and finalize monthly reports (locks the month)',
         };
     }
 }

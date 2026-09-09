@@ -183,7 +183,7 @@ class MonthlyReportSnapshotTest extends TestCase
         }
     }
 
-    public function test_only_draft_reports_are_editable_and_no_transition_is_exposed(): void
+    public function test_draft_and_ready_reports_are_editable_but_final_ones_are_not(): void
     {
         $report = app(EnsureMonthlyReportAction::class)->handle($this->september);
 
@@ -204,17 +204,22 @@ class MonthlyReportSnapshotTest extends TestCase
         app(UpdateMonthlyReportDraftAction::class)->handle($report, ['status' => 'final', 'executive_summary' => 'x']);
         $this->assertSame(ReportStatus::Draft, $report->fresh()->status);
 
+        // Ready for Review does not freeze the narrative.
         $ready = MonthlyReport::factory()->status(ReportStatus::ReadyForReview)->create();
+        app(UpdateMonthlyReportDraftAction::class)->handle($ready, ['executive_summary' => 'Still editable']);
+        $this->assertSame('Still editable', $ready->fresh()->executive_summary);
+        $this->assertTrue(User::factory()->superAdmin()->create()->can('prepare', $ready));
+
+        // Final is immutable.
+        $final = MonthlyReport::factory()->status(ReportStatus::Final)->create();
 
         try {
-            app(UpdateMonthlyReportDraftAction::class)->handle($ready, ['executive_summary' => 'nope']);
-            $this->fail('Expected non-draft reports to be rejected.');
+            app(UpdateMonthlyReportDraftAction::class)->handle($final, ['executive_summary' => 'nope']);
+            $this->fail('Expected final reports to be rejected.');
         } catch (InvalidArgumentException) {
-            $this->assertNull($ready->fresh()->executive_summary);
+            $this->assertNull($final->fresh()->executive_summary);
         }
 
-        $this->assertFalse(User::factory()->superAdmin()->create()->can('prepare', $ready));
-        $this->assertFalse(class_exists('App\Actions\Reports\MarkReportReadyAction'));
-        $this->assertFalse(class_exists('App\Actions\Reports\FinalizeMonthlyReportAction'));
+        $this->assertFalse(User::factory()->superAdmin()->create()->can('prepare', $final));
     }
 }

@@ -15,6 +15,7 @@ use App\Filament\Resources\Projects\Pages\ProjectMonthlyCycles;
 use App\Filament\Resources\Projects\Pages\ProjectMonthlyWork;
 use App\Filament\Resources\Projects\Pages\ProjectPageDetail;
 use App\Filament\Resources\Projects\Pages\ProjectPages;
+use App\Filament\Resources\Projects\Pages\ProjectReportEditor;
 use App\Filament\Resources\Projects\Pages\ProjectReports;
 use App\Filament\Resources\Projects\Pages\ProjectReportSections;
 use App\Filament\Resources\Projects\Pages\ProjectTasks;
@@ -106,6 +107,7 @@ class ProjectResource extends Resource
             'analytics' => ProjectAnalytics::route('/{record}/analytics'),
             'monthly-work' => ProjectMonthlyWork::route('/{record}/monthly-work'),
             'reports' => ProjectReports::route('/{record}/reports'),
+            'report' => ProjectReportEditor::route('/{record}/reports/{report}'),
             'report-sections' => ProjectReportSections::route('/{record}/report-sections'),
         ];
     }

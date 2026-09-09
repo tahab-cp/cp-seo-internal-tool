@@ -6,6 +6,7 @@ use App\Actions\MonthlyCycles\CreateMonthlyCycleAction;
 use App\Actions\Reports\EnsureMonthlyReportAction;
 use App\Enums\MonthlyCycleStatus;
 use App\Enums\ReportStatus;
+use App\Filament\Resources\Projects\Pages\ProjectReportEditor;
 use App\Filament\Resources\Projects\Pages\ProjectReports;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\AuthorityMetric;
@@ -81,12 +82,13 @@ class ProjectReportsAccessTest extends TestCase
                 $component->assertSee('0%')->assertSee('0 / 9 complete');
             }
 
-            $component
-                ->callTableAction('editSummary', $this->unrelatedCycle, data: ['executive_summary' => 'Summary by '.$user->id])
+            $component->assertTableActionVisible('open', $this->unrelatedCycle);
+
+            Livewire::test(ProjectReportEditor::class, ['record' => $this->unrelated->getRouteKey(), 'report' => $this->unrelatedCycle->monthlyReport->getKey()])
+                ->callAction('editExecutiveSummary', data: ['executive_summary' => 'Summary by '.$user->id])
                 ->assertNotified('Executive summary saved')
-                ->assertSee('11%')
-                ->assertSee('1 / 9 complete')
-                ->callTableAction('refreshReadiness', $this->unrelatedCycle)
+                ->assertSee('1 / 9 required sections complete')
+                ->callAction('checkReadiness')
                 ->assertNotified();
 
             $this->assertSame('Summary by '.$user->id, $this->unrelatedCycle->monthlyReport()->value('executive_summary'));
@@ -116,10 +118,12 @@ class ProjectReportsAccessTest extends TestCase
 
         Livewire::test(ProjectReports::class, ['record' => $this->assigned->getRouteKey()])
             ->assertSee('1 / 9 complete')
-            ->assertSee('11%')
-            ->callTableAction('editSummary', $this->assignedCycle, data: ['executive_summary' => 'Prepared by the executive.'])
+            ->assertSee('11%');
+
+        Livewire::test(ProjectReportEditor::class, ['record' => $this->assigned->getRouteKey(), 'report' => $this->assignedCycle->monthlyReport->getKey()])
+            ->callAction('editExecutiveSummary', data: ['executive_summary' => 'Prepared by the executive.'])
             ->assertNotified('Executive summary saved')
-            ->assertSee('2 / 9 complete');
+            ->assertSee('2 / 9 required sections complete');
 
         $report = $this->assignedCycle->monthlyReport()->firstOrFail();
         $this->assertSame(ReportStatus::Draft, $report->status);
@@ -154,8 +158,15 @@ class ProjectReportsAccessTest extends TestCase
         // Crafted table actions against another project's cycle do nothing.
         Livewire::test(ProjectReports::class, ['record' => $this->assigned->getRouteKey()])
             ->assertCanNotSeeTableRecords([$this->unrelatedCycle])
-            ->mountTableAction('editSummary', $this->unrelatedCycle)
+            ->mountTableAction('open', $this->unrelatedCycle)
             ->callMountedTableAction();
+
+        try {
+            Livewire::test(ProjectReportEditor::class, ['record' => $this->assigned->getRouteKey(), 'report' => $report->getKey()]);
+            $this->fail('Expected another project\'s report id to be unresolvable on the accessible project.');
+        } catch (ModelNotFoundException) {
+            $this->addToAssertionCount(1);
+        }
 
         $this->assertNull($report->fresh()->executive_summary);
     }
@@ -167,7 +178,7 @@ class ProjectReportsAccessTest extends TestCase
         $this->assignedCycle->forceFill(['status' => MonthlyCycleStatus::Locked, 'locked_at' => now()])->save();
 
         Livewire::test(ProjectReports::class, ['record' => $this->assigned->getRouteKey()])
-            ->assertSee('Locked')
+            ->assertSee('Reporting period locked')
             ->assertTableActionHidden('ensureReport', $this->assignedCycle)
             ->mountTableAction('ensureReport', $this->assignedCycle)
             ->callMountedTableAction();
@@ -189,40 +200,33 @@ class ProjectReportsAccessTest extends TestCase
         $this->get(ProjectResource::getUrl('view', ['record' => $this->assigned]))
             ->assertOk()
             ->assertSee(ProjectResource::getUrl('reports', ['record' => $this->assigned]));
-        $this->get(ProjectResource::getUrl('reports', ['record' => $this->assigned]))
-            ->assertOk()
-            ->assertDontSee('Finalize')
-            ->assertDontSee('Download PDF')
-            ->assertDontSee('Ready for review');
+        $this->get(ProjectResource::getUrl('reports', ['record' => $this->assigned]))->assertOk();
 
         $resourceModels = collect(Filament::getPanel('admin')->getResources())->map(fn (string $r): string => $r::getModel())->all();
         $this->assertNotContains(MonthlyReport::class, $resourceModels);
 
-        foreach (['report_snapshots', 'report_files', 'audit_logs', 'cycle_unlocks', 'csv_imports', 'analytics_syncs'] as $table) {
+        foreach (['report_snapshots', 'report_files', 'report_versions', 'audit_logs', 'cycle_unlocks', 'csv_imports', 'analytics_syncs'] as $table) {
             $this->assertFalse(Schema::hasTable($table));
         }
 
         foreach ([
-            'App\Actions\Reports\MarkReportReadyAction',
-            'App\Actions\Reports\FinalizeMonthlyReportAction',
-            'App\Actions\MonthlyCycles\LockMonthlyCycleAction',
             'App\Actions\MonthlyCycles\UnlockMonthlyCycleAction',
-            'App\Services\Reports\ReportSnapshotBuilder',
-            'App\Services\Reports\PdfReportGenerator',
+            'App\Actions\Reports\UnlockMonthlyReportAction',
+            'App\Actions\Reports\ReopenMonthlyReportAction',
             'App\Filament\Pages\Reports',
             'App\Filament\Pages\TeamDashboard',
+            'App\Filament\Resources\MonthlyReports\MonthlyReportResource',
         ] as $class) {
             $this->assertFalse(class_exists($class), "[{$class}] belongs to a later milestone.");
         }
 
-        foreach ([app_path('Services/Pdf'), app_path('Services/Integrations'), resource_path('views/reports')] as $path) {
+        foreach ([app_path('Services/Integrations'), app_path('Services/Audit'), app_path('Imports')] as $path) {
             $this->assertFalse(File::exists($path), "[{$path}] belongs to a later milestone.");
         }
 
         $this->assertEmpty(array_filter(
             array_keys(app('router')->getRoutes()->getRoutesByName()),
-            fn (string $name): bool => str_contains($name, 'pdf') || str_contains($name, 'oauth') || str_contains($name, 'csv') || str_contains($name, 'finalize'),
+            fn (string $name): bool => str_starts_with($name, 'filament.admin') && (str_contains($name, 'oauth') || str_contains($name, 'csv') || str_contains($name, 'unlock') || str_contains($name, 'import')),
         ));
-        $this->assertFalse(class_exists('Spatie\LaravelPdf\Facades\Pdf') || class_exists('Spatie\Browsershot\Browsershot'));
     }
 }

@@ -3,8 +3,6 @@
 namespace App\Filament\Resources\Projects\Pages;
 
 use App\Actions\Reports\EnsureMonthlyReportAction;
-use App\Actions\Reports\SyncReportSectionStatusesAction;
-use App\Actions\Reports\UpdateMonthlyReportDraftAction;
 use App\Exceptions\LockedMonthlyCycleException;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\MonthlyCycle;
@@ -12,7 +10,6 @@ use App\Models\Project;
 use App\Services\Reports\ReportReadinessService;
 use App\Support\Reports\ReportReadiness;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page as ResourcePage;
@@ -26,10 +23,9 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Project → Reports (minimal): one row per reporting month with the
- * report's status and live readiness, plus "Ensure draft report" and a
- * minimal executive-summary editor. The full editor, review workflow,
- * preview and PDF arrive in Milestone 13.
+ * Project → Reports: one row per reporting month with the report's status,
+ * live readiness and finalization details. Starting a draft snapshots the
+ * project's report sections; everything else happens in the report editor.
  *
  * The project is resolved through ProjectResource::getEloquentQuery() (404
  * for unrelated projects), the page requires the project `view` ability
@@ -92,14 +88,14 @@ class ProjectReports extends ResourcePage implements HasTable
         return $table
             ->query(fn (): Builder => MonthlyCycle::query()
                 ->where('project_id', $this->getProject()->getKey())
-                ->with('monthlyReport')
+                ->with('monthlyReport.finalizedBy')
                 ->latestPeriodFirst())
             ->paginated(false)
             ->columns([
                 TextColumn::make('period')
                     ->label('Period')
                     ->state(fn (MonthlyCycle $record): string => $record->periodLabel())
-                    ->description(fn (MonthlyCycle $record): ?string => $record->isLocked() ? 'Locked' : null),
+                    ->description(fn (MonthlyCycle $record): ?string => $record->isLocked() ? 'Reporting period locked' : null),
                 TextColumn::make('report_status')
                     ->label('Status')
                     ->badge()
@@ -122,6 +118,12 @@ class ProjectReports extends ResourcePage implements HasTable
                     ->description(fn (MonthlyCycle $record): ?string => ($r = $this->readinessFor($record)) && ! $r->isReady()
                         ? 'Missing: '.$r->missing()->map(fn ($s) => $s->title)->implode(', ')
                         : null),
+                TextColumn::make('finalized_by')
+                    ->label('Finalized by')
+                    ->state(fn (MonthlyCycle $record): string => $record->monthlyReport?->finalizedBy?->name ?? '—'),
+                TextColumn::make('finalized_at')
+                    ->label('Finalized')
+                    ->state(fn (MonthlyCycle $record): string => $record->monthlyReport?->finalized_at?->format('j M Y H:i') ?? '—'),
             ])
             ->recordActions([
                 Action::make('ensureReport')
@@ -132,51 +134,29 @@ class ProjectReports extends ResourcePage implements HasTable
                     ->action(function (MonthlyCycle $record, Action $action): void {
                         Gate::authorize('ensureReport', $record);
 
-                        $this->runDomain($action, fn () => app(EnsureMonthlyReportAction::class)->handle($record), 'Draft report ready');
+                        try {
+                            app(EnsureMonthlyReportAction::class)->handle($record);
+                        } catch (InvalidArgumentException|LockedMonthlyCycleException $exception) {
+                            Notification::make()->title($exception->getMessage())->danger()->send();
+
+                            $action->halt();
+                        }
+
+                        $this->readinessCache = [];
+
+                        Notification::make()->title('Draft report ready')->success()->send();
                     }),
-                Action::make('editSummary')
-                    ->label('Executive summary')
+                Action::make('open')
+                    ->label(fn (MonthlyCycle $record): string => $record->monthlyReport?->isFinal() ? 'View' : 'Open')
                     ->icon(Heroicon::OutlinedPencilSquare)
-                    ->modalHeading(fn (MonthlyCycle $record): string => 'Executive summary — '.$record->periodLabel())
-                    ->modalWidth('2xl')
-                    ->schema([
-                        Textarea::make('executive_summary')
-                            ->label('Executive summary')
-                            ->rows(8)
-                            ->maxLength(UpdateMonthlyReportDraftAction::SUMMARY_MAX)
-                            ->nullable()
-                            ->helperText('A non-empty summary completes the Executive Summary section.'),
-                    ])
-                    ->fillForm(fn (MonthlyCycle $record): array => ['executive_summary' => $record->monthlyReport?->executive_summary])
                     ->visible(fn (MonthlyCycle $record): bool => $record->monthlyReport !== null)
-                    ->authorize(fn (MonthlyCycle $record): bool => $record->monthlyReport !== null && Gate::allows('prepare', $record->monthlyReport))
-                    ->action(function (MonthlyCycle $record, array $data, Action $action): void {
-                        $report = $record->monthlyReport()->firstOrFail();
-
-                        Gate::authorize('prepare', $report);
-
-                        $this->runDomain($action, function () use ($report, $data): void {
-                            app(UpdateMonthlyReportDraftAction::class)->handle($report, $data);
-                            app(SyncReportSectionStatusesAction::class)->handle($report);
-                        }, 'Executive summary saved');
-                    }),
-                Action::make('refreshReadiness')
-                    ->label('Check readiness')
-                    ->icon(Heroicon::OutlinedArrowPath)
-                    ->color('gray')
-                    ->visible(fn (MonthlyCycle $record): bool => $record->monthlyReport !== null)
-                    ->authorize(fn (MonthlyCycle $record): bool => Gate::allows('viewReports', $this->getProject()))
-                    ->action(function (MonthlyCycle $record): void {
-                        $readiness = app(SyncReportSectionStatusesAction::class)->handle($record->monthlyReport()->firstOrFail());
-
-                        unset($this->readinessCache[$record->getKey()]);
-
-                        Notification::make()
-                            ->title($readiness->isReady() ? 'Report is ready for review' : 'Report is not ready: '.$readiness->label())
-                            ->body($readiness->isReady() ? null : $readiness->missing()->map(fn ($s) => $s->title.' — '.$s->reason)->implode("\n"))
-                            ->color($readiness->isReady() ? 'success' : 'warning')
-                            ->send();
-                    }),
+                    ->url(fn (MonthlyCycle $record): string => ProjectResource::getUrl('report', ['record' => $this->getRecord(), 'report' => $record->monthlyReport])),
+                Action::make('downloadPdf')
+                    ->label('PDF')
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('success')
+                    ->visible(fn (MonthlyCycle $record): bool => $record->monthlyReport !== null && Gate::allows('downloadPdf', $record->monthlyReport))
+                    ->url(fn (MonthlyCycle $record): string => route('filament.admin.reports.pdf', ['project' => $this->getProject()->getKey(), 'report' => $record->monthlyReport]), shouldOpenInNewTab: true),
             ])
             ->toolbarActions([])
             ->emptyStateHeading('No monthly cycles yet')
@@ -198,20 +178,5 @@ class ProjectReports extends ResourcePage implements HasTable
                 ->visible(fn (): bool => Gate::allows('manageReportSections', $this->getProject()))
                 ->url(fn (): string => ProjectResource::getUrl('report-sections', ['record' => $this->getRecord()])),
         ];
-    }
-
-    protected function runDomain(Action $action, callable $call, string $successTitle): void
-    {
-        try {
-            $call();
-        } catch (InvalidArgumentException|LockedMonthlyCycleException $exception) {
-            Notification::make()->title($exception->getMessage())->danger()->send();
-
-            $action->halt();
-        }
-
-        $this->readinessCache = [];
-
-        Notification::make()->title($successTitle)->success()->send();
     }
 }

@@ -37,4 +37,14 @@ enum ReportStatus: string implements HasColor, HasLabel
     {
         return $this === self::Draft;
     }
+
+    public function isReadyForReview(): bool
+    {
+        return $this === self::ReadyForReview;
+    }
+
+    public function isFinal(): bool
+    {
+        return $this === self::Final;
+    }
 }

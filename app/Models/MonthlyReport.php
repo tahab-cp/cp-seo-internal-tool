@@ -69,6 +69,30 @@ class MonthlyReport extends Model
         return $this->status->isDraft();
     }
 
+    public function isReadyForReview(): bool
+    {
+        return $this->status->isReadyForReview();
+    }
+
+    public function isFinal(): bool
+    {
+        return $this->status->isFinal();
+    }
+
+    public function hasPdf(): bool
+    {
+        return filled($this->generated_pdf_path);
+    }
+
+    /**
+     * Narrative may change while the report is not final and the month is
+     * not locked (Draft and Ready for Review).
+     */
+    public function isEditable(): bool
+    {
+        return ! $this->isFinal() && ! $this->isLocked();
+    }
+
     public function hasExecutiveSummary(): bool
     {
         return trim((string) $this->executive_summary) !== '';

@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Http\Controllers\Reports\ReportPdfDownloadController;
+use App\Http\Controllers\Reports\ReportPreviewController;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -17,6 +19,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -54,6 +57,14 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            // Non-Livewire report routes (HTML preview, PDF download) live
+            // inside the panel so they share its session + auth middleware.
+            ->authenticatedRoutes(function (): void {
+                Route::get('projects/{project}/reports/{report}/preview', ReportPreviewController::class)
+                    ->name('reports.preview');
+                Route::get('projects/{project}/reports/{report}/pdf', ReportPdfDownloadController::class)
+                    ->name('reports.pdf');
+            });
     }
 }
