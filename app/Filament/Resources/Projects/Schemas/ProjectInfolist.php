@@ -9,6 +9,7 @@ use App\Support\Targets\ResolvedTarget;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
@@ -18,6 +19,14 @@ class ProjectInfolist
     {
         return $schema
             ->components([
+                Section::make('Operations this month')
+                    ->description('Monthly Target Completion, tasks, deliverable progress and report state for the current reporting period. Open a module for the detail.')
+                    ->components([
+                        ViewEntry::make('operations')
+                            ->hiddenLabel()
+                            ->view('filament.resources.projects.partials.operations')
+                            ->columnSpanFull(),
+                    ]),
                 Section::make('Project')
                     ->columns(2)
                     ->components([

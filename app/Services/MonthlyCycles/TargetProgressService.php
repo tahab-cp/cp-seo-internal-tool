@@ -3,7 +3,10 @@
 namespace App\Services\MonthlyCycles;
 
 use App\Enums\BacklinkType;
+use App\Models\Backlink;
+use App\Models\ContentItem;
 use App\Models\MonthlyCycle;
+use App\Models\PageOptimization;
 use App\Support\Targets\TargetProgress;
 
 /**
@@ -24,6 +27,62 @@ class TargetProgressService
     public const GUEST_POSTS = 'guest_posts';
 
     public const BLOGS = 'blogs';
+
+    /**
+     * Target keys with an operational module that produces an actual.
+     *
+     * @return list<string>
+     */
+    public static function supportedTargetKeys(): array
+    {
+        return [self::PAGES_OPTIMIZED, self::BACKLINKS, self::GUEST_POSTS, self::BLOGS];
+    }
+
+    public static function supports(string $targetKey): bool
+    {
+        return in_array($targetKey, self::supportedTargetKeys(), true);
+    }
+
+    /**
+     * The same four derivations as the single-cycle methods, computed for
+     * many cycles with one grouped query per key (dashboard use). Cycles
+     * without rows get 0.
+     *
+     * @param  list<int>  $cycleIds
+     * @return array<int, array<string, int>> cycle id => [target key => actual]
+     */
+    public function actualsForCycles(array $cycleIds): array
+    {
+        $cycleIds = array_values(array_unique(array_map('intval', $cycleIds)));
+        $actuals = [];
+
+        foreach ($cycleIds as $id) {
+            $actuals[$id] = array_fill_keys(self::supportedTargetKeys(), 0);
+        }
+
+        if ($cycleIds === []) {
+            return $actuals;
+        }
+
+        $grouped = [
+            self::PAGES_OPTIMIZED => PageOptimization::query()->whereIn('monthly_cycle_id', $cycleIds)
+                ->selectRaw('monthly_cycle_id, COUNT(DISTINCT page_id) as total')->groupBy('monthly_cycle_id')->pluck('total', 'monthly_cycle_id'),
+            self::BACKLINKS => Backlink::query()->live()->whereIn('monthly_cycle_id', $cycleIds)
+                ->selectRaw('monthly_cycle_id, COUNT(*) as total')->groupBy('monthly_cycle_id')->pluck('total', 'monthly_cycle_id'),
+            self::GUEST_POSTS => Backlink::query()->live()->guestPosts()->whereIn('monthly_cycle_id', $cycleIds)
+                ->selectRaw('monthly_cycle_id, COUNT(*) as total')->groupBy('monthly_cycle_id')->pluck('total', 'monthly_cycle_id'),
+            self::BLOGS => ContentItem::query()->publishedBlogs()->whereIn('monthly_cycle_id', $cycleIds)
+                ->selectRaw('monthly_cycle_id, COUNT(*) as total')->groupBy('monthly_cycle_id')->pluck('total', 'monthly_cycle_id'),
+        ];
+
+        foreach ($grouped as $key => $totals) {
+            foreach ($totals as $cycleId => $total) {
+                $actuals[(int) $cycleId][$key] = (int) $total;
+            }
+        }
+
+        return $actuals;
+    }
 
     /**
      * Distinct pages with at least one optimisation event in the cycle.

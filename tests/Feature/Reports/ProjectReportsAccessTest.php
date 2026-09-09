@@ -195,8 +195,10 @@ class ProjectReportsAccessTest extends TestCase
             ->map(fn ($item) => $item->getLabel())
             ->all();
 
-        $this->assertNotContains('Reports', $labels);
-        $this->get('/admin')->assertOk()->assertDontSee('/admin/reports');
+        // The global Reports overview (Milestone 15) is a separate scoped page;
+        // report *editing* stays inside the project workspace.
+        $this->assertNotContains('Report editor', $labels);
+        $this->get('/admin')->assertOk()->assertDontSee('/admin/reports/');
         $this->get(ProjectResource::getUrl('view', ['record' => $this->assigned]))
             ->assertOk()
             ->assertSee(ProjectResource::getUrl('reports', ['record' => $this->assigned]));
