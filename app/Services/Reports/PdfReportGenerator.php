@@ -6,6 +6,7 @@ use App\Exceptions\PdfGenerationException;
 use App\Models\MonthlyReport;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -142,6 +143,13 @@ class PdfReportGenerator
             $result = Process::timeout((int) config('reports.chromium_timeout', 90))->run($command);
 
             if (! File::exists($pdfPath) || File::size($pdfPath) === 0) {
+                // Operators need the exit code and Chromium's own words; the HTML (client data) is never logged.
+                Log::error('Chromium did not produce a PDF', [
+                    'binary' => $binary,
+                    'exit_code' => $result->exitCode(),
+                    'stderr' => Str::limit(trim($result->errorOutput()), 500),
+                ]);
+
                 throw new PdfGenerationException(sprintf(
                     'Chromium did not produce a PDF (exit %s). %s',
                     $result->exitCode() ?? 'n/a',

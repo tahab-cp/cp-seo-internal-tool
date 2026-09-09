@@ -17,6 +17,10 @@ return [
 
     'pdf_directory' => env('REPORT_PDF_DIRECTORY', 'reports'),
 
+    // Report PDFs must never live on a public disk. Kept as documentation for the
+    // production preflight (app:production-check), which fails when the disk is public.
+    'pdf_disk_must_be_private' => true,
+
     /*
     |--------------------------------------------------------------------------
     | Chromium

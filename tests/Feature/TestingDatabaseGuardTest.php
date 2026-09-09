@@ -26,6 +26,21 @@ class TestingDatabaseGuardTest extends TestCase
         $this->ensureTestingDatabase();
     }
 
+    public function test_the_guard_refuses_a_non_testing_environment(): void
+    {
+        $this->assertTrue(app()->environment('testing'));
+        app()->instance('env', 'production');
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('APP_ENV is "production", not "testing"');
+
+            $this->ensureTestingDatabase();
+        } finally {
+            app()->instance('env', 'testing');
+        }
+    }
+
     public function test_the_guard_accepts_testing_database_names(): void
     {
         $this->assertTrue($this->isTestingDatabaseName('cp_seo_internal_tool_testing'));

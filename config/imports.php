@@ -49,4 +49,17 @@ return [
     */
     'preview_rows' => 10,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Raw file retention
+    |--------------------------------------------------------------------------
+    |
+    | Uploaded CSVs may contain client data. `php artisan seo:prune-import-files`
+    | (scheduled weekly) removes the stored file of batches older than this
+    | many days; the batch, its counts and its row issues stay for audit.
+    |
+    */
+
+    'file_retention_days' => (int) env('IMPORT_FILE_RETENTION_DAYS', 90),
+
 ];

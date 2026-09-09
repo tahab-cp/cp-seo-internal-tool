@@ -25,6 +25,7 @@ use App\Support\LegacyMigration\MigrationContext;
 use App\Support\LegacyMigration\MigrationIssue;
 use App\Support\LegacyMigration\MigrationReport;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Throwable;
 
@@ -251,6 +252,17 @@ class LegacyMigrator
                     'created_at' => $now,
                 ], $chunk));
             }
+
+            Log::info('Legacy migration run finished', [
+                'run_id' => $run->getKey(),
+                'mode' => $run->mode,
+                'checksum' => $run->source_checksum,
+                'created' => $report->total('create'),
+                'skipped' => $report->total('skip'),
+                'conflicts' => $report->total('conflict'),
+                'warnings' => $report->warnings(),
+                'errors' => $report->errors(),
+            ]);
 
             $run->forceFill([
                 'status' => $status,

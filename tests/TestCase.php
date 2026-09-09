@@ -40,6 +40,14 @@ abstract class TestCase extends BaseTestCase
         $connection = config('database.default');
         $database = (string) config("database.connections.{$connection}.database");
 
+        if (! app()->environment('testing')) {
+            throw new RuntimeException(sprintf(
+                'Refusing to run tests: APP_ENV is "%s", not "testing" (see phpunit.xml). '.
+                'Tests must never run with a development or production environment.',
+                app()->environment(),
+            ));
+        }
+
         if ($this->isTestingDatabaseName($database)) {
             return;
         }

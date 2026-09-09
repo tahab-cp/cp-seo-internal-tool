@@ -14,6 +14,7 @@ use App\Support\Imports\RowIssue;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Throwable;
 
@@ -109,6 +110,15 @@ class ImportExecutionService
      */
     protected function fail(ImportBatch $batch, Collection $issues, int $total, int $valid): void
     {
+        // Ids and the first reason only: never the uploaded rows themselves.
+        Log::warning('CSV import failed and was rolled back', [
+            'import_batch_id' => $batch->getKey(),
+            'project_id' => $batch->project_id,
+            'import_type' => $batch->import_type->value,
+            'errors' => $issues->filter(fn (RowIssue $i): bool => $i->isError())->count(),
+            'first_error' => $issues->first(fn (RowIssue $i): bool => $i->isError())?->message,
+        ]);
+
         DB::transaction(function () use ($batch, $issues, $total, $valid): void {
             $this->validation->storeIssues($batch, $issues);
 
