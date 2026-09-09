@@ -2,7 +2,9 @@
 
 namespace App\Actions\Rankings;
 
+use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\RankingSnapshotCycleConflictException;
+use App\Models\MonthlyCycle;
 use App\Models\Project;
 use App\Models\RankingSnapshot;
 use App\Services\Rankings\RankingSnapshotGuard;
@@ -49,9 +51,17 @@ class RecordRankingSnapshotAction
                 ->first();
 
             if ($existing !== null) {
-                $this->guard->ensureSnapshotNotLocked($existing, 'update rankings in it');
-
                 if ((int) $existing->monthly_cycle_id !== (int) $cycle->getKey()) {
+                    // Never moved and never written, so no second cycle row is
+                    // locked here (only the target cycle is held above). A
+                    // locked home month is reported as such; otherwise it is a
+                    // cycle conflict.
+                    $home = MonthlyCycle::query()->findOrFail($existing->monthly_cycle_id);
+
+                    if ($home->isLocked()) {
+                        throw LockedMonthlyCycleException::for($home, 'update rankings in it');
+                    }
+
                     throw RankingSnapshotCycleConflictException::for($existing, $cycle);
                 }
 

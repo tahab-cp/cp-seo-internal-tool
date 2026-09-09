@@ -23,14 +23,22 @@ class UpdateTaskAction
     public function handle(Task $task, array $attributes): Task
     {
         return DB::transaction(function () use ($task, $attributes): Task {
-            $this->guard->ensureTaskNotLocked($task, 'edit its tasks');
-
             $project = $task->project;
 
-            if (array_key_exists('monthly_cycle_id', $attributes)) {
-                $cycle = $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']);
-                $this->guard->ensureCycleNotLocked($cycle, 'move tasks into it');
-                $task->monthly_cycle_id = $cycle?->getKey();
+            // Source and (possible) destination cycles are row-locked together,
+            // in deterministic order, and re-checked fresh.
+            $moving = array_key_exists('monthly_cycle_id', $attributes);
+            $destination = $moving ? $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']) : null;
+
+            $this->guard->lockCyclesForMove(
+                $task->monthly_cycle_id,
+                $moving ? $destination?->getKey() : $task->monthly_cycle_id,
+                'edit its tasks',
+                'move tasks into it',
+            );
+
+            if ($moving) {
+                $task->monthly_cycle_id = $destination?->getKey();
             }
 
             if (array_key_exists('assigned_user_id', $attributes)) {

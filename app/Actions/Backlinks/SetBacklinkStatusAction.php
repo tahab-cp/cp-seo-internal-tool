@@ -5,6 +5,7 @@ namespace App\Actions\Backlinks;
 use App\Enums\BacklinkStatus;
 use App\Models\Backlink;
 use App\Services\Backlinks\BacklinkGuard;
+use Illuminate\Support\Facades\DB;
 
 class SetBacklinkStatusAction
 {
@@ -19,11 +20,13 @@ class SetBacklinkStatusAction
      */
     public function handle(Backlink $backlink, BacklinkStatus|string $status): Backlink
     {
-        $this->guard->ensureBacklinkNotLocked($backlink, 'change backlink status in it');
+        return DB::transaction(function () use ($backlink, $status): Backlink {
+            $this->guard->ensureBacklinkNotLocked($backlink, 'change backlink status in it');
 
-        $backlink->status = $this->guard->normaliseStatus($status);
-        $backlink->save();
+            $backlink->status = $this->guard->normaliseStatus($status);
+            $backlink->save();
 
-        return $backlink;
+            return $backlink;
+        });
     }
 }

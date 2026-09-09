@@ -4,7 +4,6 @@ namespace App\Services\Content;
 
 use App\Enums\ContentStatus;
 use App\Enums\ContentType;
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\UnauthorizedProjectUserException;
 use App\Models\ContentItem;
 use App\Models\Keyword;
@@ -12,6 +11,7 @@ use App\Models\MonthlyCycle;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ActiveUserGuard;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
@@ -27,6 +27,8 @@ use InvalidArgumentException;
  */
 class ContentIntegrityGuard
 {
+    use LocksMonthlyCycles;
+
     public const URL_MAX = 500;
 
     public function __construct(
@@ -78,18 +80,18 @@ class ContentIntegrityGuard
         return $keyword;
     }
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked. Project-level (null) needs no lock.
+     */
     public function ensureCycleNotLocked(?MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle?->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     public function ensureItemNotLocked(ContentItem $item, string $operation): void
     {
-        if ($item->isLocked()) {
-            throw LockedMonthlyCycleException::for($item->monthlyCycle, $operation);
-        }
+        $this->lockCycle($item->monthly_cycle_id, $operation);
     }
 
     /**

@@ -99,7 +99,12 @@ class ProjectReports extends ResourcePage implements HasTable
                 TextColumn::make('report_status')
                     ->label('Status')
                     ->badge()
-                    ->state(fn (MonthlyCycle $record): string => $record->monthlyReport?->status->getLabel() ?? 'Not started')
+                    ->state(fn (MonthlyCycle $record): string => $record->monthlyReport
+                        ? $record->monthlyReport->status->getLabel().' · '.$record->monthlyReport->versionLabel()
+                        : 'Not started')
+                    ->description(fn (MonthlyCycle $record): ?string => ($count = $record->monthlyReport?->revisions()->count())
+                        ? $count.' superseded version'.($count === 1 ? '' : 's')
+                        : null)
                     ->color(fn (MonthlyCycle $record): string => $record->monthlyReport?->status->getColor() ?? 'gray'),
                 TextColumn::make('readiness')
                     ->label('Readiness')

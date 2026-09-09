@@ -12,6 +12,7 @@ use App\Models\MonthlyCycle;
 use App\Models\MonthlyReport;
 use App\Models\MonthlyReportSection;
 use App\Models\Project;
+use App\Services\MonthlyCycles\MonthlyCycleMutationGuard;
 use App\Support\MonthlyCycles\CyclePeriod;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,7 +54,7 @@ class MonthlyReportConcurrencyTest extends TestCase
 
             public function __construct(callable $winnerWork)
             {
-                parent::__construct(app(EnsureProjectReportSectionsAction::class));
+                parent::__construct(app(EnsureProjectReportSectionsAction::class), app(MonthlyCycleMutationGuard::class));
 
                 $this->winnerWork = $winnerWork;
             }

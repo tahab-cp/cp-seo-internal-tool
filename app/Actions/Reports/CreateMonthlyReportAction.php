@@ -8,12 +8,14 @@ use App\Exceptions\LockedMonthlyCycleException;
 use App\Models\MonthlyCycle;
 use App\Models\MonthlyReport;
 use App\Models\ProjectReportSection;
+use App\Services\MonthlyCycles\MonthlyCycleMutationGuard;
 use Illuminate\Support\Facades\DB;
 
 class CreateMonthlyReportAction
 {
     public function __construct(
         protected EnsureProjectReportSectionsAction $ensureSections,
+        protected MonthlyCycleMutationGuard $cycleLock,
     ) {}
 
     /**
@@ -35,10 +37,14 @@ class CreateMonthlyReportAction
         }
 
         return DB::transaction(function () use ($cycle): MonthlyReport {
+            // Row-lock the cycle and re-check: a finalization may have locked it meanwhile.
+            $this->cycleLock->lockForWrite($cycle, 'start a report for it');
+
             $sections = $this->ensureSections->handle($cycle->project);
 
             $report = $cycle->monthlyReport()->create([
                 'status' => ReportStatus::Draft,
+                'version' => 1,
             ]);
 
             $sections->each(fn (ProjectReportSection $section) => $report->sections()->create([

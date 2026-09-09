@@ -86,19 +86,23 @@ class PdfReportGenerator
     }
 
     /**
-     * reports/{project}/{yyyy}-{mm}/report-{id}-{timestamp}.pdf
+     * reports/{project}/{yyyy}-{mm}/report-{id}-v{version}-{timestamp}.pdf
+     *
+     * Version-aware so a corrected report never overwrites the PDF of a
+     * superseded final.
      */
     public function pathFor(MonthlyReport $report): string
     {
         $cycle = $report->monthlyCycle;
 
         return sprintf(
-            '%s/%d/%04d-%02d/report-%d-%s.pdf',
+            '%s/%d/%04d-%02d/report-%d-v%d-%s.pdf',
             trim((string) config('reports.pdf_directory', 'reports'), '/'),
             $cycle->project_id,
             $cycle->year,
             $cycle->month,
             $report->getKey(),
+            max(1, (int) $report->version),
             now()->format('YmdHis'),
         );
     }

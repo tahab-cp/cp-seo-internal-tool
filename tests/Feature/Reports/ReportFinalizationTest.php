@@ -124,7 +124,7 @@ class ReportFinalizationTest extends TestCase
             $this->assertSame(1, $fresh->snapshot_json['schema_version']);
             $this->assertSame('final', $fresh->snapshot_json['report']['status']);
             $this->assertSame($finalizer->name, $fresh->snapshot_json['finalized_by']['name']);
-            $this->assertMatchesRegularExpression('#^reports/'.$this->project->getKey().'/2026-0[89]/report-'.$fresh->getKey().'-\d{14}\.pdf$#', $fresh->generated_pdf_path);
+            $this->assertMatchesRegularExpression('#^reports/'.$this->project->getKey().'/2026-0[89]/report-'.$fresh->getKey().'-v1-\d{14}\.pdf$#', $fresh->generated_pdf_path);
             Storage::disk('local')->assertExists($fresh->generated_pdf_path);
             $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($fresh->generated_pdf_path));
             $this->assertSame('2026-10-01 09:30:00', $fresh->generated_at->toDateTimeString());

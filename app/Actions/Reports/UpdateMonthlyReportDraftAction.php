@@ -2,14 +2,18 @@
 
 namespace App\Actions\Reports;
 
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Models\MonthlyReport;
+use App\Services\MonthlyCycles\MonthlyCycleMutationGuard;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class UpdateMonthlyReportDraftAction
 {
     public const SUMMARY_MAX = 10000;
+
+    public function __construct(
+        protected MonthlyCycleMutationGuard $cycleLock,
+    ) {}
 
     /**
      * Edit the report's client-facing narrative (the executive summary).
@@ -23,9 +27,7 @@ class UpdateMonthlyReportDraftAction
     public function handle(MonthlyReport $report, array $attributes): MonthlyReport
     {
         return DB::transaction(function () use ($report, $attributes): MonthlyReport {
-            if ($report->isLocked()) {
-                throw LockedMonthlyCycleException::for($report->monthlyCycle, 'edit its report');
-            }
+            $this->cycleLock->lockForWrite($report->monthly_cycle_id, 'edit its report');
 
             if ($report->isFinal()) {
                 throw new InvalidArgumentException('A final report cannot be edited.');

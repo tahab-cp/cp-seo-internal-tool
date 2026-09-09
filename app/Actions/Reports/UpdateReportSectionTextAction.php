@@ -2,14 +2,18 @@
 
 namespace App\Actions\Reports;
 
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Models\MonthlyReportSection;
+use App\Services\MonthlyCycles\MonthlyCycleMutationGuard;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class UpdateReportSectionTextAction
 {
     public const TEXT_MAX = 10000;
+
+    public function __construct(
+        protected MonthlyCycleMutationGuard $cycleLock,
+    ) {}
 
     /**
      * Optional commentary for one snapshotted section (interpretation,
@@ -23,9 +27,7 @@ class UpdateReportSectionTextAction
         return DB::transaction(function () use ($section, $customText): MonthlyReportSection {
             $report = $section->report;
 
-            if ($report->isLocked()) {
-                throw LockedMonthlyCycleException::for($report->monthlyCycle, 'edit its report');
-            }
+            $this->cycleLock->lockForWrite($report->monthly_cycle_id, 'edit its report');
 
             if ($report->isFinal()) {
                 throw new InvalidArgumentException('A final report cannot be edited.');

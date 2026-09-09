@@ -21,19 +21,27 @@ class UpdatePageOptimizationAction
     public function handle(PageOptimization $optimization, array $attributes): PageOptimization
     {
         return DB::transaction(function () use ($optimization, $attributes): PageOptimization {
-            $this->guard->ensureOptimizationNotLocked($optimization, 'edit page optimisations in it');
-
             $project = $optimization->project;
+
+            // Source and (possible) destination cycles are row-locked together,
+            // in deterministic order, and re-checked fresh.
+            $moving = array_key_exists('monthly_cycle_id', $attributes);
+            $destination = $moving ? $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']) : null;
+
+            $this->guard->lockCyclesForMove(
+                $optimization->monthly_cycle_id,
+                $moving ? $destination->getKey() : $optimization->monthly_cycle_id,
+                'edit page optimisations in it',
+                'move page optimisations into it',
+            );
 
             if (array_key_exists('page_id', $attributes)) {
                 $page = $this->guard->resolvePage($project, $attributes['page_id']);
                 $optimization->page_id = $page->getKey();
             }
 
-            if (array_key_exists('monthly_cycle_id', $attributes)) {
-                $cycle = $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']);
-                $this->guard->ensureCycleNotLocked($cycle, 'move page optimisations into it');
-                $optimization->monthly_cycle_id = $cycle->getKey();
+            if ($moving) {
+                $optimization->monthly_cycle_id = $destination->getKey();
             }
 
             if (array_key_exists('user_id', $attributes)) {

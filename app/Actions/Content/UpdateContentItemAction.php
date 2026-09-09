@@ -24,14 +24,23 @@ class UpdateContentItemAction
     public function handle(ContentItem $item, array $attributes): ContentItem
     {
         return DB::transaction(function () use ($item, $attributes): ContentItem {
-            $this->guard->ensureItemNotLocked($item, 'edit content in it');
-
             $project = $item->project;
 
-            if (array_key_exists('monthly_cycle_id', $attributes)) {
-                $cycle = $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']);
-                $this->guard->ensureCycleNotLocked($cycle, 'move content into it');
-                $item->monthly_cycle_id = $cycle?->getKey();
+            // Source and (possible) destination cycles are row-locked together,
+            // in deterministic order, and re-checked fresh. Project-level (null)
+            // sides need no lock.
+            $moving = array_key_exists('monthly_cycle_id', $attributes);
+            $destination = $moving ? $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']) : null;
+
+            $this->guard->lockCyclesForMove(
+                $item->monthly_cycle_id,
+                $moving ? $destination?->getKey() : $item->monthly_cycle_id,
+                'edit content in it',
+                'move content into it',
+            );
+
+            if ($moving) {
+                $item->monthly_cycle_id = $destination?->getKey();
             }
 
             if (array_key_exists('target_keyword_id', $attributes)) {

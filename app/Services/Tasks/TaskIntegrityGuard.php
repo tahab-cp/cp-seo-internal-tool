@@ -2,13 +2,13 @@
 
 namespace App\Services\Tasks;
 
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\TaskAssignmentException;
 use App\Models\MonthlyCycle;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ActiveUserGuard;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
@@ -22,6 +22,8 @@ use InvalidArgumentException;
  */
 class TaskIntegrityGuard
 {
+    use LocksMonthlyCycles;
+
     public function __construct(
         protected ActiveUserGuard $activeUsers,
     ) {}
@@ -48,18 +50,18 @@ class TaskIntegrityGuard
         return $cycle;
     }
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked. Project-level (null) needs no lock.
+     */
     public function ensureCycleNotLocked(?MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle?->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     public function ensureTaskNotLocked(Task $task, string $operation): void
     {
-        if ($task->isLocked()) {
-            throw LockedMonthlyCycleException::for($task->monthlyCycle, $operation);
-        }
+        $this->lockCycle($task->monthly_cycle_id, $operation);
     }
 
     /**

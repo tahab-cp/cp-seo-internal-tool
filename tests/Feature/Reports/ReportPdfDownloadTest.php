@@ -58,7 +58,7 @@ class ReportPdfDownloadTest extends TestCase
 
             $response = $this->get($this->pdfUrl())->assertOk();
             $this->assertSame('application/pdf', $response->headers->get('content-type'));
-            $this->assertStringContainsString('casa-botanica-seo-report-2026-09.pdf', (string) $response->headers->get('content-disposition'));
+            $this->assertStringContainsString('casa-botanica-seo-report-2026-09-v1.pdf', (string) $response->headers->get('content-disposition'));
             $this->assertStringStartsWith('%PDF', $response->streamedContent());
 
             Livewire::test(ProjectReportEditor::class, ['record' => $this->project->getRouteKey(), 'report' => $this->report->getKey()])

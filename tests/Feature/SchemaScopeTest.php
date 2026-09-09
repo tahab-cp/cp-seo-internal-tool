@@ -26,6 +26,7 @@ class SchemaScopeTest extends TestCase
             'gsc_monthly_metrics', 'gsc_query_metrics', 'gsc_page_metrics',
             'ga4_monthly_metrics', 'ga4_country_metrics', 'authority_metrics',
             'monthly_notes', 'project_report_sections', 'monthly_reports', 'monthly_report_sections',
+            'monthly_report_revisions', 'monthly_cycle_audit_events',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -34,7 +35,7 @@ class SchemaScopeTest extends TestCase
     public function test_no_seo_domain_tables_exist_yet(): void
     {
         $future = [
-            'report_snapshots', 'report_files', 'audit_logs', 'cycle_unlocks', 'csv_imports', 'analytics_syncs',
+            'report_snapshots', 'report_files', 'activity_log', 'csv_imports', 'analytics_syncs', 'dashboards',
         ];
 
         foreach ($future as $table) {
@@ -64,6 +65,20 @@ class SchemaScopeTest extends TestCase
         ], Schema::getColumnListing('project_user'));
     }
 
+    public function test_revision_and_audit_tables_match_the_milestone_fourteen_columns(): void
+    {
+        $this->assertTrue(Schema::hasColumn('monthly_reports', 'version'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'monthly_report_id', 'version', 'snapshot_json', 'generated_pdf_path', 'generated_at', 'finalized_at',
+            'finalized_by', 'archived_at', 'archived_by', 'unlock_reason', 'created_at',
+        ], Schema::getColumnListing('monthly_report_revisions'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'monthly_cycle_id', 'monthly_report_id', 'user_id', 'event_type', 'reason', 'metadata_json', 'created_at',
+        ], Schema::getColumnListing('monthly_cycle_audit_events'));
+    }
+
     public function test_notes_and_report_tables_match_the_milestone_twelve_columns(): void
     {
         $this->assertEqualsCanonicalizing([
@@ -75,7 +90,7 @@ class SchemaScopeTest extends TestCase
         ], Schema::getColumnListing('project_report_sections'));
 
         $this->assertEqualsCanonicalizing([
-            'id', 'monthly_cycle_id', 'status', 'executive_summary', 'review_notes', 'snapshot_json', 'generated_pdf_path',
+            'id', 'monthly_cycle_id', 'status', 'version', 'executive_summary', 'review_notes', 'snapshot_json', 'generated_pdf_path',
             'generated_at', 'finalized_at', 'finalized_by', 'created_at', 'updated_at',
         ], Schema::getColumnListing('monthly_reports'));
 

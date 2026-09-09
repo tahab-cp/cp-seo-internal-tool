@@ -3,12 +3,12 @@
 namespace App\Services\Rankings;
 
 use App\Enums\RankingSource;
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Models\Keyword;
 use App\Models\MonthlyCycle;
 use App\Models\Page;
 use App\Models\Project;
 use App\Models\RankingSnapshot;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 
@@ -22,6 +22,8 @@ use InvalidArgumentException;
  */
 class RankingSnapshotGuard
 {
+    use LocksMonthlyCycles;
+
     public function resolveKeyword(Project $project, int|string|null $keywordId): Keyword
     {
         $keyword = filled($keywordId) ? Keyword::query()->find((int) $keywordId) : null;
@@ -71,18 +73,18 @@ class RankingSnapshotGuard
         return $cycle;
     }
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked.
+     */
     public function ensureCycleNotLocked(MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     public function ensureSnapshotNotLocked(RankingSnapshot $snapshot, string $operation): void
     {
-        if ($snapshot->isLocked()) {
-            throw LockedMonthlyCycleException::for($snapshot->monthlyCycle, $operation);
-        }
+        $this->lockCycle($snapshot->monthly_cycle_id, $operation);
     }
 
     /**

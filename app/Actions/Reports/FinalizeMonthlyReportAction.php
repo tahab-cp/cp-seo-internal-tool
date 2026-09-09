@@ -2,6 +2,7 @@
 
 namespace App\Actions\Reports;
 
+use App\Enums\AuditEventType;
 use App\Enums\MonthlyCycleStatus;
 use App\Enums\ReportStatus;
 use App\Exceptions\LockedMonthlyCycleException;
@@ -9,7 +10,9 @@ use App\Exceptions\ReportDataChangedException;
 use App\Exceptions\ReportNotReadyException;
 use App\Models\MonthlyReport;
 use App\Models\User;
+use App\Services\MonthlyCycles\MonthlyCycleMutationGuard;
 use App\Services\Reports\PdfReportGenerator;
+use App\Services\Reports\ReportAuditRecorder;
 use App\Services\Reports\ReportSnapshotBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -22,33 +25,40 @@ class FinalizeMonthlyReportAction
         protected SyncReportSectionStatusesAction $syncStatuses,
         protected ReportSnapshotBuilder $snapshotBuilder,
         protected PdfReportGenerator $pdfGenerator,
+        protected MonthlyCycleMutationGuard $cycleLock,
+        protected ReportAuditRecorder $audit,
     ) {}
 
     /**
-     * Ready for Review → Final, locking the month. Synchronous, and safe:
+     * Ready for Review → Final (for the report's current version), locking
+     * the month. Synchronous, and safe:
      *
      *   1. authorize (reports.finalize + project access)
      *   2. status must be Ready for Review (Final is a deterministic no-op)
      *   3. the month must not already be locked
      *   4. re-evaluate readiness LIVE and refuse if anything is missing
      *   5. build the immutable snapshot from current source data
-     *   6. generate the PDF from that snapshot (nothing persisted yet)
-     *   7. in one transaction, under a row lock on the report:
+     *   6. generate the PDF from that snapshot (nothing persisted, no row
+     *      locks held while Chromium runs)
+     *   7. in one short transaction, holding FOR UPDATE on the report row
+     *      AND the MonthlyCycle row (the same row every monthly writer
+     *      locks):
      *        - refuse if another finalization already won
-     *        - re-run readiness again
-     *        - rebuild the snapshot and compare fingerprints: if any
-     *          report-relevant source data changed while Chromium was
-     *          running, abort (optimistic consistency check)
+     *        - re-check the cycle is still unlocked
+     *        - re-run readiness
+     *        - rebuild the snapshot and compare fingerprints (optimistic
+     *          consistency check)
      *        - persist snapshot_json / pdf path / timestamps / finalizer /
-     *          status, and lock the MonthlyCycle
+     *          status, lock the MonthlyCycle, record the audit event
+     *
+     * Because every monthly writer takes the same cycle row lock inside its
+     * own transaction, none can commit between the final comparison and
+     * the cycle lock: it blocks, then sees the month as locked.
      *
      * If the PDF fails, nothing changes. If anything fails after the PDF
-     * was written (including the consistency check), the file is removed
-     * again. Duplicate calls on a final report return it untouched.
-     *
-     * The remaining window is the few milliseconds between the re-check
-     * and the commit; the cycle lock then makes every monthly module
-     * read-only through the existing guards.
+     * was written, the file is removed again. Duplicate calls on a final
+     * report return it untouched. Previously archived revisions are never
+     * touched.
      */
     public function handle(MonthlyReport $report, User $finalizer): MonthlyReport
     {
@@ -82,7 +92,7 @@ class FinalizeMonthlyReportAction
         $pdfPath = $this->pdfGenerator->generate($snapshot, $report);
 
         try {
-            return DB::transaction(function () use ($report, $cycle, $finalizer, $finalizedAt, $snapshot, $fingerprint, $pdfPath): MonthlyReport {
+            return DB::transaction(function () use ($report, $finalizer, $finalizedAt, $snapshot, $fingerprint, $pdfPath): MonthlyReport {
                 /** @var MonthlyReport $locked */
                 $locked = MonthlyReport::query()->lockForUpdate()->findOrFail($report->getKey());
 
@@ -93,9 +103,9 @@ class FinalizeMonthlyReportAction
                     return $locked;
                 }
 
-                if ($locked->monthlyCycle->isLocked()) {
-                    throw LockedMonthlyCycleException::for($locked->monthlyCycle, 'finalize its report');
-                }
+                // The shared monthly-writer lock: held until commit.
+                $lockedCycle = $this->cycleLock->lockForWrite($locked->monthly_cycle_id, 'finalize its report');
+                $locked->setRelation('monthlyCycle', $lockedCycle);
 
                 // Source data may have moved while Chromium was rendering.
                 $readiness = $this->syncStatuses->handle($locked);
@@ -119,14 +129,20 @@ class FinalizeMonthlyReportAction
                     'status' => ReportStatus::Final,
                 ])->save();
 
-                $cycle->forceFill([
+                $lockedCycle->forceFill([
                     'status' => MonthlyCycleStatus::Locked,
                     'locked_at' => $finalizedAt,
                     'locked_by' => $finalizer->getKey(),
                 ])->save();
 
+                $this->audit->record($locked, $finalizer, AuditEventType::ReportFinalized, null, [
+                    'finalized_at' => $finalizedAt->toIso8601String(),
+                    'snapshot_fingerprint' => $fingerprint,
+                    'generated_pdf_path' => $pdfPath,
+                ]);
+
                 $report->setRawAttributes($locked->getAttributes(), true);
-                $report->setRelation('monthlyCycle', $cycle);
+                $report->setRelation('monthlyCycle', $lockedCycle);
 
                 return $report;
             });

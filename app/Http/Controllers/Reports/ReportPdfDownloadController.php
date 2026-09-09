@@ -29,10 +29,11 @@ class ReportPdfDownloadController extends Controller
 
         $cycle = $monthlyReport->monthlyCycle;
         $filename = sprintf(
-            '%s-seo-report-%04d-%02d.pdf',
+            '%s-seo-report-%04d-%02d-v%d.pdf',
             Str::slug($cycle->project->name) ?: 'project',
             $cycle->year,
             $cycle->month,
+            $monthlyReport->version,
         );
 
         return $pdf->disk()->download($monthlyReport->generated_pdf_path, $filename, ['Content-Type' => 'application/pdf']);

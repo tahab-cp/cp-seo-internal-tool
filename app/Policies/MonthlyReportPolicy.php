@@ -83,6 +83,26 @@ class MonthlyReportPolicy
         return $this->view($user, $report) && $report->isFinal() && $report->hasPdf();
     }
 
+    /**
+     * Unlock a final report's month for correction: Super Admin only
+     * (reports.unlock). The current final is archived as a revision first.
+     */
+    public function unlock(User $user, MonthlyReport $report): bool
+    {
+        return $user->hasPermission(Permission::UnlockReports)
+            && $this->view($user, $report)
+            && $report->isFinal()
+            && $report->isLocked();
+    }
+
+    /**
+     * Archived revisions and audit history follow report visibility.
+     */
+    public function viewHistory(User $user, MonthlyReport $report): bool
+    {
+        return $this->view($user, $report);
+    }
+
     public function delete(User $user, MonthlyReport $report): bool
     {
         return false;

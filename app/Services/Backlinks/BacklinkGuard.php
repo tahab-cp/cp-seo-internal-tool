@@ -4,13 +4,13 @@ namespace App\Services\Backlinks;
 
 use App\Enums\BacklinkStatus;
 use App\Enums\BacklinkType;
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\UnauthorizedProjectUserException;
 use App\Models\Backlink;
 use App\Models\MonthlyCycle;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ActiveUserGuard;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
@@ -25,6 +25,8 @@ use InvalidArgumentException;
  */
 class BacklinkGuard
 {
+    use LocksMonthlyCycles;
+
     public const URL_MAX = 500;
 
     public function __construct(
@@ -46,18 +48,18 @@ class BacklinkGuard
         return $cycle;
     }
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked.
+     */
     public function ensureCycleNotLocked(MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     public function ensureBacklinkNotLocked(Backlink $backlink, string $operation): void
     {
-        if ($backlink->isLocked()) {
-            throw LockedMonthlyCycleException::for($backlink->monthlyCycle, $operation);
-        }
+        $this->lockCycle($backlink->monthly_cycle_id, $operation);
     }
 
     /**

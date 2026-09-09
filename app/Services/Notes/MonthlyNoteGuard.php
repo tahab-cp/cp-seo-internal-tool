@@ -3,12 +3,12 @@
 namespace App\Services\Notes;
 
 use App\Enums\MonthlyNoteType;
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\UnauthorizedProjectUserException;
 use App\Models\MonthlyCycle;
 use App\Models\MonthlyNote;
 use App\Models\User;
 use App\Services\ActiveUserGuard;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
@@ -19,6 +19,8 @@ use InvalidArgumentException;
  */
 class MonthlyNoteGuard
 {
+    use LocksMonthlyCycles;
+
     public const TITLE_MAX = 150;
 
     public const BODY_MAX = 5000;
@@ -27,18 +29,18 @@ class MonthlyNoteGuard
         protected ActiveUserGuard $activeUsers,
     ) {}
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked.
+     */
     public function ensureCycleNotLocked(MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     public function ensureNoteNotLocked(MonthlyNote $note, string $operation): void
     {
-        if ($note->isLocked()) {
-            throw LockedMonthlyCycleException::for($note->monthlyCycle, $operation);
-        }
+        $this->lockCycle($note->monthly_cycle_id, $operation);
     }
 
     public function ensureAuthor(MonthlyCycle $cycle, User $author): void

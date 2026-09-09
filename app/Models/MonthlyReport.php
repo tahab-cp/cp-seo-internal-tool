@@ -26,6 +26,7 @@ class MonthlyReport extends Model
     protected $fillable = [
         'monthly_cycle_id',
         'status',
+        'version',
         'executive_summary',
         'review_notes',
         'snapshot_json',
@@ -42,6 +43,7 @@ class MonthlyReport extends Model
     {
         return [
             'status' => ReportStatus::class,
+            'version' => 'integer',
             'snapshot_json' => 'array',
             'generated_at' => 'datetime',
             'finalized_at' => 'datetime',
@@ -62,6 +64,37 @@ class MonthlyReport extends Model
     public function finalizedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'finalized_by');
+    }
+
+    /**
+     * Superseded finals, newest version first.
+     *
+     * @return HasMany<MonthlyReportRevision, $this>
+     */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(MonthlyReportRevision::class)->orderByDesc('version');
+    }
+
+    /**
+     * @return HasMany<MonthlyCycleAuditEvent, $this>
+     */
+    public function auditEvents(): HasMany
+    {
+        return $this->hasMany(MonthlyCycleAuditEvent::class)->orderBy('created_at')->orderBy('id');
+    }
+
+    public function versionLabel(): string
+    {
+        return 'v'.$this->version;
+    }
+
+    /**
+     * A report being corrected after a previous final was archived.
+     */
+    public function isCorrection(): bool
+    {
+        return ! $this->isFinal() && $this->version > 1;
     }
 
     public function isDraft(): bool

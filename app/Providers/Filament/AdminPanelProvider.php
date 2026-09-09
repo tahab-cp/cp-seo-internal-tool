@@ -4,6 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Http\Controllers\Reports\ReportPdfDownloadController;
 use App\Http\Controllers\Reports\ReportPreviewController;
+use App\Http\Controllers\Reports\ReportRevisionPdfDownloadController;
+use App\Http\Controllers\Reports\ReportRevisionPreviewController;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -65,6 +67,10 @@ class AdminPanelProvider extends PanelProvider
                     ->name('reports.preview');
                 Route::get('projects/{project}/reports/{report}/pdf', ReportPdfDownloadController::class)
                     ->name('reports.pdf');
+                Route::get('projects/{project}/reports/{report}/revisions/{revision}/preview', ReportRevisionPreviewController::class)
+                    ->name('reports.revisions.preview');
+                Route::get('projects/{project}/reports/{report}/revisions/{revision}/pdf', ReportRevisionPdfDownloadController::class)
+                    ->name('reports.revisions.pdf');
             });
     }
 }

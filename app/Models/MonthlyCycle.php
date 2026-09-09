@@ -198,6 +198,16 @@ class MonthlyCycle extends Model
         return $this->hasOne(MonthlyReport::class);
     }
 
+    /**
+     * Immutable lifecycle events (finalized, unlocked, marked ready).
+     *
+     * @return HasMany<MonthlyCycleAuditEvent, $this>
+     */
+    public function auditEvents(): HasMany
+    {
+        return $this->hasMany(MonthlyCycleAuditEvent::class)->orderBy('created_at')->orderBy('id');
+    }
+
     public function period(): CyclePeriod
     {
         return new CyclePeriod($this->year, $this->month);

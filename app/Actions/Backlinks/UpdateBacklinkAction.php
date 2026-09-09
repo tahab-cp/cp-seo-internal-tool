@@ -22,12 +22,20 @@ class UpdateBacklinkAction
     public function handle(Backlink $backlink, array $attributes): Backlink
     {
         return DB::transaction(function () use ($backlink, $attributes): Backlink {
-            $this->guard->ensureBacklinkNotLocked($backlink, 'edit backlinks in it');
+            // Source and (possible) destination cycles are row-locked together,
+            // in deterministic order, and re-checked fresh.
+            $moving = array_key_exists('monthly_cycle_id', $attributes);
+            $destination = $moving ? $this->guard->resolveCycle($backlink->project, $attributes['monthly_cycle_id']) : null;
 
-            if (array_key_exists('monthly_cycle_id', $attributes)) {
-                $cycle = $this->guard->resolveCycle($backlink->project, $attributes['monthly_cycle_id']);
-                $this->guard->ensureCycleNotLocked($cycle, 'move backlinks into it');
-                $backlink->monthly_cycle_id = $cycle->getKey();
+            $this->guard->lockCyclesForMove(
+                $backlink->monthly_cycle_id,
+                $moving ? $destination->getKey() : $backlink->monthly_cycle_id,
+                'edit backlinks in it',
+                'move backlinks into it',
+            );
+
+            if ($moving) {
+                $backlink->monthly_cycle_id = $destination->getKey();
             }
 
             if (array_key_exists('published_url', $attributes)) {

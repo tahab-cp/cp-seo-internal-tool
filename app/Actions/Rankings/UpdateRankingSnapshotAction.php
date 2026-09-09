@@ -23,14 +23,22 @@ class UpdateRankingSnapshotAction
     public function handle(RankingSnapshot $snapshot, array $attributes): RankingSnapshot
     {
         return DB::transaction(function () use ($snapshot, $attributes): RankingSnapshot {
-            $this->guard->ensureSnapshotNotLocked($snapshot, 'edit rankings in it');
-
             $project = $snapshot->keyword->project;
 
-            if (array_key_exists('monthly_cycle_id', $attributes)) {
-                $cycle = $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']);
-                $this->guard->ensureCycleNotLocked($cycle, 'move rankings into it');
-                $snapshot->monthly_cycle_id = $cycle->getKey();
+            // Source and (possible) destination cycles are row-locked together,
+            // in deterministic order, and re-checked fresh.
+            $moving = array_key_exists('monthly_cycle_id', $attributes);
+            $destination = $moving ? $this->guard->resolveCycle($project, $attributes['monthly_cycle_id']) : null;
+
+            $this->guard->lockCyclesForMove(
+                $snapshot->monthly_cycle_id,
+                $moving ? $destination->getKey() : $snapshot->monthly_cycle_id,
+                'edit rankings in it',
+                'move rankings into it',
+            );
+
+            if ($moving) {
+                $snapshot->monthly_cycle_id = $destination->getKey();
             }
 
             if (array_key_exists('checked_at', $attributes)) {

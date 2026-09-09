@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Projects\Pages;
 use App\Actions\Reports\FinalizeMonthlyReportAction;
 use App\Actions\Reports\MarkReportReadyAction;
 use App\Actions\Reports\SyncReportSectionStatusesAction;
+use App\Actions\Reports\UnlockMonthlyReportAction;
 use App\Actions\Reports\UpdateMonthlyReportDraftAction;
 use App\Actions\Reports\UpdateReportReviewNotesAction;
 use App\Actions\Reports\UpdateReportSectionTextAction;
@@ -12,7 +13,9 @@ use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\PdfGenerationException;
 use App\Exceptions\ReportNotReadyException;
 use App\Filament\Resources\Projects\ProjectResource;
+use App\Models\MonthlyCycleAuditEvent;
 use App\Models\MonthlyReport;
+use App\Models\MonthlyReportRevision;
 use App\Models\MonthlyReportSection;
 use App\Models\Project;
 use App\Models\User;
@@ -74,7 +77,9 @@ class ProjectReportEditor extends ResourcePage
 
     public function getTitle(): string
     {
-        return 'Report — '.$this->getReport()->monthlyCycle->periodLabel();
+        $report = $this->getReport();
+
+        return 'Report — '.$report->monthlyCycle->periodLabel().' ('.$report->versionLabel().')';
     }
 
     public function getSubheading(): ?string
@@ -98,7 +103,7 @@ class ProjectReportEditor extends ResourcePage
     public function getReport(): MonthlyReport
     {
         return MonthlyReport::query()
-            ->with(['monthlyCycle.project.client', 'finalizedBy'])
+            ->with(['monthlyCycle.project.client', 'finalizedBy', 'revisions'])
             ->findOrFail($this->reportId);
     }
 
@@ -152,6 +157,66 @@ class ProjectReportEditor extends ResourcePage
     public function canPrepare(): bool
     {
         return Gate::allows('prepare', $this->getReport());
+    }
+
+    /**
+     * Archived finals, newest first.
+     *
+     * @return Collection<int, MonthlyReportRevision>
+     */
+    public function getRevisions(): Collection
+    {
+        return $this->getReport()->revisions()->with(['finalizedBy', 'archivedBy'])->get();
+    }
+
+    /**
+     * Immutable lifecycle events for this report, oldest first.
+     *
+     * @return Collection<int, MonthlyCycleAuditEvent>
+     */
+    public function getAuditEvents(): Collection
+    {
+        return $this->getReport()->auditEvents()->with('user')->get();
+    }
+
+    public function revisionPreviewUrl(MonthlyReportRevision $revision): string
+    {
+        return route('filament.admin.reports.revisions.preview', ['project' => $this->getProject()->getKey(), 'report' => $this->reportId, 'revision' => $revision->getKey()]);
+    }
+
+    public function revisionPdfUrl(MonthlyReportRevision $revision): string
+    {
+        return route('filament.admin.reports.revisions.pdf', ['project' => $this->getProject()->getKey(), 'report' => $this->reportId, 'revision' => $revision->getKey()]);
+    }
+
+    public function unlockAction(): Action
+    {
+        return Action::make('unlock')
+            ->label('Unlock for Correction')
+            ->icon(Heroicon::OutlinedLockOpen)
+            ->color('danger')
+            ->modalHeading('Unlock this reporting month for correction')
+            ->modalDescription('Unlocking allows this reporting month to be corrected. The current final report will be permanently preserved as a historical version. The corrected report must be reviewed and finalized again.')
+            ->modalSubmitActionLabel('Unlock for Correction')
+            ->modalWidth('2xl')
+            ->schema([
+                Textarea::make('reason')
+                    ->label('Correction reason')
+                    ->required()
+                    ->minLength(UnlockMonthlyReportAction::REASON_MIN)
+                    ->maxLength(UnlockMonthlyReportAction::REASON_MAX)
+                    ->rows(4)
+                    ->placeholder('e.g. GA4 organic sessions were entered incorrectly.')
+                    ->helperText('Recorded permanently with the archived version and in the audit trail.'),
+            ])
+            ->authorize(fn (): bool => Gate::allows('unlock', $this->getReport()))
+            ->action(function (array $data, Action $action): void {
+                $report = $this->getReport();
+
+                Gate::authorize('unlock', $report);
+
+                $this->runDomain($action, fn () => app(UnlockMonthlyReportAction::class)->handle($report, $this->currentUser(), $data['reason'] ?? null), 'Report unlocked for correction. The previous final version has been preserved.');
+            });
     }
 
     protected function getHeaderActions(): array

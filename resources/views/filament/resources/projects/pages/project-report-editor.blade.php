@@ -8,6 +8,8 @@
         $sectionData = $this->getSectionData();
         $canPrepare = $this->canPrepare();
         $isFinal = $report->isFinal();
+        $revisions = $this->getRevisions();
+        $auditEvents = $this->getAuditEvents();
         $n = fn ($v) => $v === null ? '—' : number_format((float) $v);
     @endphp
 
@@ -18,9 +20,15 @@
         <div class="grid gap-6 md:grid-cols-4" data-report-status="{{ $report->status->value }}" data-readiness="{{ $readiness->percentage() }}">
             <div>
                 <div class="text-xs text-gray-500">Status</div>
-                <div class="mt-1"><x-filament::badge :color="$report->status->getColor()">{{ $report->status->getLabel() }}</x-filament::badge></div>
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                    <x-filament::badge :color="$report->status->getColor()">{{ $report->status->getLabel() }}</x-filament::badge>
+                    <span class="text-sm font-semibold" data-report-version="{{ $report->version }}">{{ $isFinal ? 'Current version' : 'Preparing' }}: {{ $report->versionLabel() }}</span>
+                </div>
                 @if ($cycle->isLocked())
                     <div class="mt-1 text-xs text-gray-500" data-period-locked>Reporting period locked</div>
+                @endif
+                @if ($isFinal && Illuminate\Support\Facades\Gate::allows('unlock', $report))
+                    <div class="mt-3">{{ $this->unlockAction }}</div>
                 @endif
             </div>
             <div>
@@ -58,6 +66,32 @@
             </div>
         @endif
     </x-filament::section>
+
+    @if ($report->isCorrection() && $revisions->isNotEmpty())
+        @php $previous = $revisions->first(); @endphp
+        <div class="rounded-lg border border-warning-300 bg-warning-50 p-4 text-sm dark:border-warning-500/40 dark:bg-warning-500/10" data-correction-banner>
+            <div class="font-semibold text-warning-800 dark:text-warning-200">Correction in progress</div>
+            <div class="mt-2 grid gap-4 md:grid-cols-2">
+                <div>
+                    <div class="text-xs text-gray-500">Previous final</div>
+                    <div class="font-medium" data-previous-version="{{ $previous->version }}">Version {{ $previous->version }}</div>
+                    <div class="text-xs text-gray-500">Finalized {{ $previous->finalized_at?->format('j M Y H:i') }}@if ($previous->finalizedBy) by {{ $previous->finalizedBy->name }}@endif</div>
+                    <div class="text-xs text-gray-500">Unlock reason: {{ $previous->unlock_reason }}</div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <x-filament::link :href="$this->revisionPreviewUrl($previous)" target="_blank" size="sm">View Previous Final</x-filament::link>
+                        @if ($previous->hasPdf())
+                            <x-filament::link :href="$this->revisionPdfUrl($previous)" target="_blank" size="sm">Download Previous PDF</x-filament::link>
+                        @endif
+                    </div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500">Current</div>
+                    <div class="font-medium">Version {{ $report->version }} {{ $report->status->getLabel() }}</div>
+                    <div class="text-xs text-gray-500">Correct the month's data, then mark the report ready and finalize it again.</div>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- Executive summary --}}
     <x-filament::section>
@@ -122,5 +156,68 @@
                 </li>
             @endforeach
         </ul>
+    </x-filament::section>
+
+    {{-- Version history --}}
+    <x-filament::section>
+        <x-slot name="heading">Version history</x-slot>
+        <x-slot name="description">Every superseded final is preserved with its own snapshot and PDF. Archived versions are read-only evidence and never rebuilt from live data.</x-slot>
+
+        <table class="w-full text-sm" data-version-history>
+            <thead class="text-left text-xs text-gray-500">
+                <tr><th class="py-1">Version</th><th class="py-1">State</th><th class="py-1">Finalized</th><th class="py-1">By</th><th class="py-1">Notes</th><th class="py-1 text-right">Actions</th></tr>
+            </thead>
+            <tbody>
+                <tr class="border-t border-gray-100 dark:border-gray-800" data-version-row="{{ $report->version }}" data-version-state="{{ $isFinal ? 'final' : $report->status->value }}">
+                    <td class="py-2 font-semibold">{{ $report->versionLabel() }}</td>
+                    <td class="py-2"><x-filament::badge :color="$report->status->getColor()" size="sm">{{ $isFinal ? 'Final' : $report->status->getLabel() }}</x-filament::badge></td>
+                    <td class="py-2">{{ $report->finalized_at?->format('j M Y H:i') ?? '—' }}</td>
+                    <td class="py-2">{{ $report->finalizedBy?->name ?? '—' }}</td>
+                    <td class="py-2 text-xs text-gray-500">{{ $isFinal ? 'Current final report' : 'In preparation' }}</td>
+                    <td class="py-2 text-right">
+                        @if ($isFinal)
+                            <x-filament::link :href="$this->previewUrl()" target="_blank" size="sm">View</x-filament::link>
+                            @if ($report->hasPdf())· <x-filament::link :href="$this->pdfUrl()" target="_blank" size="sm">PDF</x-filament::link>@endif
+                        @endif
+                    </td>
+                </tr>
+                @foreach ($revisions as $revision)
+                    <tr class="border-t border-gray-100 dark:border-gray-800" data-version-row="{{ $revision->version }}" data-version-state="superseded" data-revision="{{ $revision->getKey() }}">
+                        <td class="py-2 font-semibold">{{ $revision->versionLabel() }}</td>
+                        <td class="py-2"><x-filament::badge color="gray" size="sm">Superseded</x-filament::badge></td>
+                        <td class="py-2">{{ $revision->finalized_at?->format('j M Y H:i') }}</td>
+                        <td class="py-2">{{ $revision->finalizedBy?->name ?? '—' }}</td>
+                        <td class="py-2 text-xs text-gray-500">Unlock reason: {{ $revision->unlock_reason }} <span class="text-gray-400">({{ $revision->archivedBy?->name ?? 'Unknown' }}, {{ $revision->archived_at?->format('j M Y H:i') }})</span></td>
+                        <td class="py-2 text-right">
+                            <x-filament::link :href="$this->revisionPreviewUrl($revision)" target="_blank" size="sm">View</x-filament::link>
+                            @if ($revision->hasPdf())· <x-filament::link :href="$this->revisionPdfUrl($revision)" target="_blank" size="sm">PDF</x-filament::link>@endif
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </x-filament::section>
+
+    {{-- Audit timeline --}}
+    <x-filament::section>
+        <x-slot name="heading">Audit history</x-slot>
+        <x-slot name="description">Immutable record of who marked this report ready, finalized it, or unlocked it for correction.</x-slot>
+
+        @if ($auditEvents->isEmpty())
+            <p class="text-sm text-gray-500" data-audit-empty>No lifecycle events yet.</p>
+        @else
+            <ol class="space-y-2 text-sm" data-audit-timeline>
+                @foreach ($auditEvents as $event)
+                    <li class="flex flex-wrap items-baseline gap-2" data-audit-event="{{ $event->event_type->value }}" data-audit-version="{{ $event->version() ?? '' }}">
+                        <span class="w-32 shrink-0 text-xs text-gray-500">{{ $event->created_at?->format('j M Y H:i') }}</span>
+                        <x-filament::badge :color="$event->event_type->getColor()" size="sm">{{ $event->event_type->getLabel() }}</x-filament::badge>
+                        <span>Report v{{ $event->version() ?? '?' }} by {{ $event->user?->name ?? 'Unknown' }}</span>
+                        @if ($event->reason)
+                            <span class="text-gray-500">— Reason: {{ $event->reason }}</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ol>
+        @endif
     </x-filament::section>
 </x-filament-panels::page>

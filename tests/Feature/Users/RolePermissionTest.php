@@ -48,6 +48,9 @@ class RolePermissionTest extends TestCase
         ], UserRole::SeoManager->permissions());
 
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::ManagePackages));
+        $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::UnlockReports));
+        $this->assertFalse(UserRole::SeoExecutive->hasPermission(Permission::UnlockReports));
+        $this->assertTrue(UserRole::SuperAdmin->hasPermission(Permission::UnlockReports));
 
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::ViewUsers));
         $this->assertFalse(UserRole::SeoManager->hasPermission(Permission::CreateUsers));

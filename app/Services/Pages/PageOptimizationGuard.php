@@ -2,7 +2,6 @@
 
 namespace App\Services\Pages;
 
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\UnauthorizedProjectUserException;
 use App\Models\MonthlyCycle;
 use App\Models\Page;
@@ -10,6 +9,7 @@ use App\Models\PageOptimization;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ActiveUserGuard;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
@@ -24,6 +24,8 @@ use InvalidArgumentException;
  */
 class PageOptimizationGuard
 {
+    use LocksMonthlyCycles;
+
     public function __construct(
         protected ActiveUserGuard $activeUsers,
     ) {}
@@ -65,18 +67,18 @@ class PageOptimizationGuard
         return $cycle;
     }
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked.
+     */
     public function ensureCycleNotLocked(MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     public function ensureOptimizationNotLocked(PageOptimization $optimization, string $operation): void
     {
-        if ($optimization->isLocked()) {
-            throw LockedMonthlyCycleException::for($optimization->monthlyCycle, $operation);
-        }
+        $this->lockCycle($optimization->monthly_cycle_id, $operation);
     }
 
     /**

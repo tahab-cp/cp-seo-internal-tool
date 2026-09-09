@@ -5,6 +5,7 @@ namespace App\Actions\Tasks;
 use App\Enums\TaskStatus;
 use App\Models\Task;
 use App\Services\Tasks\TaskIntegrityGuard;
+use Illuminate\Support\Facades\DB;
 
 class SetTaskStatusAction
 {
@@ -18,13 +19,15 @@ class SetTaskStatusAction
      */
     public function handle(Task $task, TaskStatus|string $status): Task
     {
-        $this->guard->ensureTaskNotLocked($task, 'change the status of its tasks');
+        return DB::transaction(function () use ($task, $status): Task {
+            $this->guard->ensureTaskNotLocked($task, 'change the status of its tasks');
 
-        static::applyStatus($task, $status);
+            static::applyStatus($task, $status);
 
-        $task->save();
+            $task->save();
 
-        return $task;
+            return $task;
+        });
     }
 
     /**

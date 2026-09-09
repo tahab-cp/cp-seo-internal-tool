@@ -3,13 +3,13 @@
 namespace App\Services\Analytics;
 
 use App\Enums\DataSource;
-use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\UnauthorizedProjectUserException;
 use App\Models\MonthlyCycle;
 use App\Models\Page;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ActiveUserGuard;
+use App\Services\MonthlyCycles\Concerns\LocksMonthlyCycles;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
@@ -29,17 +29,21 @@ use InvalidArgumentException;
  */
 class AnalyticsIntegrityGuard
 {
+    use LocksMonthlyCycles;
+
     public const URL_MAX = 500;
 
     public function __construct(
         protected ActiveUserGuard $activeUsers,
     ) {}
 
+    /**
+     * Row-lock the cycle (inside the caller's transaction) and refuse if it
+     * is locked.
+     */
     public function ensureCycleNotLocked(MonthlyCycle $cycle, string $operation): void
     {
-        if ($cycle->isLocked()) {
-            throw LockedMonthlyCycleException::for($cycle, $operation);
-        }
+        $this->lockCycle($cycle, $operation);
     }
 
     /**

@@ -205,28 +205,29 @@ class ProjectReportsAccessTest extends TestCase
         $resourceModels = collect(Filament::getPanel('admin')->getResources())->map(fn (string $r): string => $r::getModel())->all();
         $this->assertNotContains(MonthlyReport::class, $resourceModels);
 
-        foreach (['report_snapshots', 'report_files', 'report_versions', 'audit_logs', 'cycle_unlocks', 'csv_imports', 'analytics_syncs'] as $table) {
+        foreach (['report_snapshots', 'report_files', 'activity_log', 'csv_imports', 'analytics_syncs', 'dashboards'] as $table) {
             $this->assertFalse(Schema::hasTable($table));
         }
 
         foreach ([
-            'App\Actions\MonthlyCycles\UnlockMonthlyCycleAction',
-            'App\Actions\Reports\UnlockMonthlyReportAction',
-            'App\Actions\Reports\ReopenMonthlyReportAction',
+            'App\Actions\Reports\RestoreReportRevisionAction',
+            'App\Actions\Reports\RollbackSourceDataAction',
             'App\Filament\Pages\Reports',
             'App\Filament\Pages\TeamDashboard',
             'App\Filament\Resources\MonthlyReports\MonthlyReportResource',
+            'App\Filament\Resources\MonthlyReportRevisions\MonthlyReportRevisionResource',
+            'App\Filament\Resources\MonthlyCycleAuditEvents\MonthlyCycleAuditEventResource',
         ] as $class) {
-            $this->assertFalse(class_exists($class), "[{$class}] belongs to a later milestone.");
+            $this->assertFalse(class_exists($class), "[{$class}] belongs to a later milestone or must never exist.");
         }
 
-        foreach ([app_path('Services/Integrations'), app_path('Services/Audit'), app_path('Imports')] as $path) {
+        foreach ([app_path('Services/Integrations'), app_path('Imports')] as $path) {
             $this->assertFalse(File::exists($path), "[{$path}] belongs to a later milestone.");
         }
 
         $this->assertEmpty(array_filter(
             array_keys(app('router')->getRoutes()->getRoutesByName()),
-            fn (string $name): bool => str_starts_with($name, 'filament.admin') && (str_contains($name, 'oauth') || str_contains($name, 'csv') || str_contains($name, 'unlock') || str_contains($name, 'import')),
+            fn (string $name): bool => str_starts_with($name, 'filament.admin') && (str_contains($name, 'oauth') || str_contains($name, 'csv') || str_contains($name, 'import')),
         ));
     }
 }
