@@ -1,0 +1,4 @@
+legacy_client,client_name,project_name,website_url,target_location,owner,package,start_date,status,team
+Acme Holdings,Acme Holdings,Acme Garden Centre,https://acme-garden.example,London,manager@sample.test,Growth,2026-05-01,Active,exec@sample.test
+Acme Holdings,,Acme Plumbing,https://acme-plumbing.example,Leeds,,Growth,2026-06-01,Live,exec@sample.test
+Bright Dental,,Bright Dental Clinic,https://bright-dental.example,,Some Former Employee,Platinum Legacy,2026-06-15,,

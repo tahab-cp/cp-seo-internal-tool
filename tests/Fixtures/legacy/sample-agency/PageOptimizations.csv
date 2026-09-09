@@ -1,0 +1,3 @@
+project,page url,date,meta title,meta description,content,internal links,schema,by,notes
+Acme Garden Centre,https://acme-garden.example/roses,2026-07-14,yes,yes,no,no,no,exec@sample.test,Refreshed titles
+Acme Garden Centre,https://acme-garden.example/,2026-07-16,no,no,yes,yes,no,,

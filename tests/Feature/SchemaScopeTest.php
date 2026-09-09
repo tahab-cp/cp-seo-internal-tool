@@ -28,6 +28,7 @@ class SchemaScopeTest extends TestCase
             'monthly_notes', 'project_report_sections', 'monthly_reports', 'monthly_report_sections',
             'monthly_report_revisions', 'monthly_cycle_audit_events',
             'import_batches', 'import_row_errors',
+            'legacy_migration_runs', 'legacy_migration_issues', 'legacy_migration_records',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -37,11 +38,34 @@ class SchemaScopeTest extends TestCase
     {
         $future = [
             'report_snapshots', 'report_files', 'activity_log', 'csv_imports', 'analytics_syncs', 'dashboards',
-            'spreadsheet_migrations', 'import_jobs', 'import_rows',
+            'import_jobs', 'import_rows', 'google_sheet_syncs', 'client_portal_users', 'report_files',
         ];
 
         foreach ($future as $table) {
             $this->assertFalse(Schema::hasTable($table), "Table [{$table}] must not exist in this milestone.");
+        }
+    }
+
+    public function test_legacy_migration_tables_match_the_milestone_seventeen_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'source_identifier', 'source_filename', 'source_checksum', 'mapper_version', 'mode', 'status', 'created_by',
+            'total_items', 'created_items', 'updated_items', 'skipped_items', 'conflict_items', 'warning_count', 'error_count',
+            'metadata_json', 'started_at', 'completed_at', 'created_at', 'updated_at',
+        ], Schema::getColumnListing('legacy_migration_runs'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'legacy_migration_run_id', 'source_sheet', 'source_row', 'severity', 'entity_type', 'message', 'raw_data_json', 'created_at',
+        ], Schema::getColumnListing('legacy_migration_issues'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'legacy_migration_run_id', 'source_identifier', 'source_sheet', 'source_row', 'fingerprint', 'entity_type', 'entity_id', 'created_at',
+        ], Schema::getColumnListing('legacy_migration_records'));
+
+        // Migration never touches the operational schema: no legacy columns anywhere.
+        foreach (['keywords', 'ranking_snapshots', 'backlinks', 'monthly_cycles', 'projects', 'clients'] as $table) {
+            $this->assertFalse(Schema::hasColumn($table, 'legacy_id'));
+            $this->assertFalse(Schema::hasColumn($table, 'legacy_migration_run_id'));
         }
     }
 

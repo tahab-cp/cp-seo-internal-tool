@@ -17,8 +17,14 @@ class ImportScopeTest extends TestCase
         $composer = json_decode(File::get(base_path('composer.json')), true);
         $required = array_keys(($composer['require'] ?? []) + ($composer['require-dev'] ?? []));
 
-        foreach (['phpoffice/phpspreadsheet', 'maatwebsite/excel', 'openspout/openspout', 'league/csv', 'google/apiclient', 'google/analytics-data', 'revolution/laravel-google-sheets'] as $package) {
+        // openspout/openspout is declared for the Milestone 17 administrative legacy migration only;
+        // the user-facing import layer must not touch it (asserted below).
+        foreach (['phpoffice/phpspreadsheet', 'maatwebsite/excel', 'league/csv', 'google/apiclient', 'google/analytics-data', 'revolution/laravel-google-sheets'] as $package) {
             $this->assertNotContains($package, $required, "{$package} must not be a direct dependency");
+        }
+
+        foreach (File::allFiles(app_path('Services/Imports')) as $file) {
+            $this->assertStringNotContainsString('OpenSpout', File::get($file->getPathname()), 'product CSV imports never read spreadsheets');
         }
     }
 

@@ -1,0 +1,5 @@
+project,date,published_url,anchor,target,type,status,DA,DR,spam,notes
+Acme Garden Centre,2026-07-05,https://blog.example/garden-tips,garden centre,https://acme-garden.example/,Guest Post,Published / Live,45,40,1,
+Acme Garden Centre,2026-07-20,https://blog.example/garden-tips,garden centre london,https://acme-garden.example/,guest post,live,45,40,1,Second placement on the same URL
+Acme Garden Centre,2026-07-22,https://dir.example/acme,,,Directory,Pending,,,,
+Acme Plumbing,2026-08-02,https://forum.example/thread,plumber,https://acme-plumbing.example/,Forum,Sponsored,,,,

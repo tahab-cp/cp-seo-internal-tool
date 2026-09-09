@@ -1,0 +1,4 @@
+project,task,status,due,assigned to,period,category
+Acme Garden Centre,Fix broken internal links,Done,2026-07-08,exec@sample.test,2026-07,Technical
+Acme Garden Centre,Write meta descriptions,WIP,2026-07-15,Someone Unknown,2026-07,On-page
+Acme Plumbing,Claim GBP listing,Maybe,2026-08-05,,2026-08,Local
