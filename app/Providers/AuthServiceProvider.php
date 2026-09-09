@@ -6,6 +6,7 @@ use App\Enums\Permission;
 use App\Models\Backlink;
 use App\Models\Client;
 use App\Models\ContentItem;
+use App\Models\ImportBatch;
 use App\Models\Keyword;
 use App\Models\MonthlyCycle;
 use App\Models\MonthlyCycleAuditEvent;
@@ -23,6 +24,7 @@ use App\Models\User;
 use App\Policies\BacklinkPolicy;
 use App\Policies\ClientPolicy;
 use App\Policies\ContentItemPolicy;
+use App\Policies\ImportBatchPolicy;
 use App\Policies\KeywordPolicy;
 use App\Policies\MonthlyCycleAuditEventPolicy;
 use App\Policies\MonthlyCyclePolicy;
@@ -65,6 +67,7 @@ class AuthServiceProvider extends ServiceProvider
         MonthlyReport::class => MonthlyReportPolicy::class,
         MonthlyReportRevision::class => MonthlyReportRevisionPolicy::class,
         MonthlyCycleAuditEvent::class => MonthlyCycleAuditEventPolicy::class,
+        ImportBatch::class => ImportBatchPolicy::class,
     ];
 
     public function boot(): void

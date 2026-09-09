@@ -9,6 +9,7 @@ use App\Actions\Analytics\SaveGscMonthlyMetricsAction;
 use App\Actions\Analytics\SaveGscPageMetricsAction;
 use App\Actions\Analytics\SaveGscQueryMetricsAction;
 use App\Exceptions\LockedMonthlyCycleException;
+use App\Filament\Resources\Imports\ImportBatchResource;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\AnalyticsForms;
 use App\Models\AuthorityMetric;
@@ -169,6 +170,11 @@ class ProjectAnalytics extends ResourcePage
                 ->icon(Heroicon::OutlinedArrowUturnLeft)
                 ->color('gray')
                 ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
+            Action::make('importCsv')
+                ->label('Import CSV')
+                ->icon(Heroicon::OutlinedArrowUpTray)
+                ->color('gray')
+                ->url(fn (): string => ImportBatchResource::getUrl('create', ['project' => $this->getRecord()->getKey()])),
         ];
     }
 

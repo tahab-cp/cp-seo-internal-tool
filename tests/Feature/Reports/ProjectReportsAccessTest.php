@@ -227,9 +227,10 @@ class ProjectReportsAccessTest extends TestCase
             $this->assertFalse(File::exists($path), "[{$path}] belongs to a later milestone.");
         }
 
+        // CSV imports arrived in Milestone 16 (filament.admin.resources.imports.*); OAuth/API sync still must not exist.
         $this->assertEmpty(array_filter(
             array_keys(app('router')->getRoutes()->getRoutesByName()),
-            fn (string $name): bool => str_starts_with($name, 'filament.admin') && (str_contains($name, 'oauth') || str_contains($name, 'csv') || str_contains($name, 'import')),
+            fn (string $name): bool => str_starts_with($name, 'filament.admin') && (str_contains($name, 'oauth') || str_contains($name, 'sync')),
         ));
     }
 }

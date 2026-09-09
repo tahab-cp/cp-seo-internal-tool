@@ -6,9 +6,11 @@ use App\Actions\Keywords\CreateKeywordAction;
 use App\Actions\Keywords\SetKeywordStatusAction;
 use App\Actions\Keywords\UpdateKeywordAction;
 use App\Actions\Rankings\RecordRankingSnapshotsAction;
+use App\Enums\ImportType;
 use App\Enums\KeywordIntent;
 use App\Enums\KeywordStatus;
 use App\Exceptions\LockedMonthlyCycleException;
+use App\Filament\Resources\Imports\ImportBatchResource;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\KeywordForm;
 use App\Filament\Resources\Projects\Schemas\RankingForms;
@@ -213,6 +215,11 @@ class ProjectKeywords extends ResourcePage implements HasTable
                 ->icon(Heroicon::OutlinedArrowUturnLeft)
                 ->color('gray')
                 ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
+            Action::make('importCsv')
+                ->label('Import CSV')
+                ->icon(Heroicon::OutlinedArrowUpTray)
+                ->color('gray')
+                ->url(fn (): string => ImportBatchResource::getUrl('create', ['project' => $this->getRecord()->getKey(), 'type' => ImportType::Keywords->value])),
             Action::make('createKeyword')
                 ->label('Add keyword')
                 ->icon(Heroicon::OutlinedPlus)

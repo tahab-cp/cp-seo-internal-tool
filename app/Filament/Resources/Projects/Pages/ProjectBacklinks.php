@@ -7,7 +7,9 @@ use App\Actions\Backlinks\SetBacklinkStatusAction;
 use App\Actions\Backlinks\UpdateBacklinkAction;
 use App\Enums\BacklinkStatus;
 use App\Enums\BacklinkType;
+use App\Enums\ImportType;
 use App\Exceptions\LockedMonthlyCycleException;
+use App\Filament\Resources\Imports\ImportBatchResource;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\BacklinkForm;
 use App\Models\Backlink;
@@ -306,6 +308,11 @@ class ProjectBacklinks extends ResourcePage implements HasTable
                 ->icon(Heroicon::OutlinedArrowUturnLeft)
                 ->color('gray')
                 ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
+            Action::make('importCsv')
+                ->label('Import CSV')
+                ->icon(Heroicon::OutlinedArrowUpTray)
+                ->color('gray')
+                ->url(fn (): string => ImportBatchResource::getUrl('create', ['project' => $this->getRecord()->getKey(), 'type' => ImportType::Backlinks->value])),
             Action::make('createBacklink')
                 ->label('Add backlink')
                 ->icon(Heroicon::OutlinedPlus)

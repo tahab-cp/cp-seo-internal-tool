@@ -27,6 +27,7 @@ class SchemaScopeTest extends TestCase
             'ga4_monthly_metrics', 'ga4_country_metrics', 'authority_metrics',
             'monthly_notes', 'project_report_sections', 'monthly_reports', 'monthly_report_sections',
             'monthly_report_revisions', 'monthly_cycle_audit_events',
+            'import_batches', 'import_row_errors',
         ] as $table) {
             $this->assertTrue(Schema::hasTable($table), "Expected table [{$table}] to exist.");
         }
@@ -36,10 +37,30 @@ class SchemaScopeTest extends TestCase
     {
         $future = [
             'report_snapshots', 'report_files', 'activity_log', 'csv_imports', 'analytics_syncs', 'dashboards',
+            'spreadsheet_migrations', 'import_jobs', 'import_rows',
         ];
 
         foreach ($future as $table) {
             $this->assertFalse(Schema::hasTable($table), "Table [{$table}] must not exist in this milestone.");
+        }
+    }
+
+    public function test_import_tables_match_the_milestone_sixteen_columns(): void
+    {
+        $this->assertEqualsCanonicalizing([
+            'id', 'project_id', 'monthly_cycle_id', 'import_type', 'original_filename', 'stored_file_path', 'mapping_json',
+            'status', 'total_rows', 'valid_rows', 'imported_rows', 'failed_rows', 'created_by', 'started_at', 'completed_at',
+            'created_at', 'updated_at',
+        ], Schema::getColumnListing('import_batches'));
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'import_batch_id', 'row_number', 'field', 'severity', 'message', 'raw_row_json', 'created_at',
+        ], Schema::getColumnListing('import_row_errors'));
+
+        // Analytics detail rows are not re-labelled per row: the batch records CSV provenance.
+        foreach (['gsc_query_metrics', 'gsc_page_metrics', 'ga4_country_metrics'] as $table) {
+            $this->assertFalse(Schema::hasColumn($table, 'source'));
+            $this->assertFalse(Schema::hasColumn($table, 'import_batch_id'));
         }
     }
 
