@@ -21,7 +21,6 @@ use App\Filament\Resources\Projects\Pages\ProjectReportSections;
 use App\Filament\Resources\Projects\Pages\ProjectTasks;
 use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
-use App\Filament\Resources\Projects\Schemas\ProjectInfolist;
 use App\Filament\Resources\Projects\Tables\ProjectsTable;
 use App\Models\Project;
 use App\Models\User;
@@ -72,11 +71,6 @@ class ProjectResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return ProjectForm::configure($schema);
-    }
-
-    public static function infolist(Schema $schema): Schema
-    {
-        return ProjectInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table

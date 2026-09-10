@@ -7,6 +7,7 @@ use App\Actions\Pages\SetPageStatusAction;
 use App\Actions\Pages\UpdatePageAction;
 use App\Actions\Pages\UpdatePageOptimizationAction;
 use App\Enums\PageStatus;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\PageForm;
 use App\Filament\Resources\Projects\Schemas\PageOptimizationForm;
@@ -16,7 +17,9 @@ use App\Models\PageOptimization;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\MonthlyCycles\CyclePeriod;
+use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
@@ -27,18 +30,21 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Locked;
 
 /**
- * Project → Pages → one page: master data plus its optimisation history,
- * with the Record optimisation action.
+ * Project → Pages → one page: master data, the current month's
+ * optimisation summary and the full optimisation history, with the Record
+ * optimisation action. Presentation reads the existing records only.
  *
  * The page is resolved through Page::scopeAccessibleBy() inside the
  * project (404 for anything outside the actor's projects).
  */
 class ProjectPageDetail extends ResourcePage implements HasTable
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
     use InteractsWithTable;
 
@@ -64,12 +70,12 @@ class ProjectPageDetail extends ResourcePage implements HasTable
 
     public function getTitle(): string
     {
-        return $this->getPage()->displayName();
+        return $this->getProject()->name;
     }
 
     public function getSubheading(): ?string
     {
-        return $this->getProject()->name.' — '.$this->getPage()->url;
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -93,6 +99,52 @@ class ProjectPageDetail extends ResourcePage implements HasTable
         $user = Filament::auth()->user();
 
         return $user;
+    }
+
+    public function getCurrentPeriod(): CyclePeriod
+    {
+        return CyclePeriod::current();
+    }
+
+    /**
+     * The project's cycle for the current month, if it exists (never created here).
+     */
+    public function getCurrentCycle(): ?MonthlyCycle
+    {
+        return $this->getProject()->monthlyCycles()->forPeriod($this->getCurrentPeriod())->first();
+    }
+
+    /**
+     * This page's optimisation events in the current month, newest first.
+     *
+     * @return Collection<int, PageOptimization>
+     */
+    public function getCurrentMonthOptimisations(): Collection
+    {
+        $cycle = $this->getCurrentCycle();
+
+        if ($cycle === null) {
+            return new Collection;
+        }
+
+        return PageOptimization::query()
+            ->where('page_id', $this->pageId)
+            ->where('monthly_cycle_id', $cycle->getKey())
+            ->with('user')
+            ->orderByDesc('optimized_at')
+            ->get();
+    }
+
+    public function getOptimisationCount(): int
+    {
+        return PageOptimization::query()->where('page_id', $this->pageId)->count();
+    }
+
+    public function getLastOptimisedAt(): ?CarbonImmutable
+    {
+        $latest = PageOptimization::query()->where('page_id', $this->pageId)->max('optimized_at');
+
+        return $latest ? CarbonImmutable::parse($latest) : null;
     }
 
     protected function defaultCycleId(): ?int
@@ -119,6 +171,7 @@ class ProjectPageDetail extends ResourcePage implements HasTable
                 TextColumn::make('monthlyCycle.year')
                     ->label('Reporting month')
                     ->state(fn (PageOptimization $record): string => $record->monthlyCycle?->periodLabel() ?? '—')
+                    ->description(fn (PageOptimization $record): ?string => $record->isLocked() ? 'Locked · read-only' : null)
                     ->badge()
                     ->color(fn (PageOptimization $record): string => $record->isLocked() ? 'gray' : 'info'),
                 TextColumn::make('user.name')
@@ -128,7 +181,7 @@ class ProjectPageDetail extends ResourcePage implements HasTable
                     ->label('Changes')
                     ->state(fn (PageOptimization $record): array => $record->changeLabels())
                     ->badge()
-                    ->listWithLineBreaks(),
+                    ->color('gray'),
                 TextColumn::make('notes')
                     ->limit(60)
                     ->placeholder('—')
@@ -151,9 +204,10 @@ class ProjectPageDetail extends ResourcePage implements HasTable
                     }),
             ])
             ->toolbarActions([])
+            ->paginated([10, 25, 50])
             ->emptyStateIcon(Heroicon::OutlinedWrenchScrewdriver)
             ->emptyStateHeading('No optimisation work recorded yet')
-            ->emptyStateDescription('Use “Record optimisation” to log the SEO work done on this page each month.');
+            ->emptyStateDescription('Record the SEO work completed on this page so it appears in monthly progress and reporting.');
     }
 
     protected function getHeaderActions(): array
@@ -161,8 +215,9 @@ class ProjectPageDetail extends ResourcePage implements HasTable
         return [
             Action::make('backToPages')
                 ->label('All pages')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
+                ->icon(Heroicon::OutlinedArrowLeft)
                 ->color('gray')
+                ->link()
                 ->url(fn (): string => ProjectResource::getUrl('pages', ['record' => $this->getRecord()])),
             Action::make('recordOptimization')
                 ->label('Record optimisation')
@@ -172,11 +227,16 @@ class ProjectPageDetail extends ResourcePage implements HasTable
                 ->visible(fn (): bool => ! $this->getPage()->isRemoved())
                 ->authorize(fn (): bool => Gate::allows('managePages', $this->getProject()))
                 ->action(function (array $data): void {
-                    Gate::authorize('managePages', $this->getProject());
+                    $project = $this->getProject();
 
+                    Gate::authorize('managePages', $project);
+
+                    // The route page is authoritative: it is re-resolved inside the project and
+                    // overrides any page_id that might arrive in the submitted form state. The
+                    // action's guard still verifies page and cycle belong to this project.
                     app(RecordPageOptimizationAction::class)->handle(
-                        $this->getProject(),
-                        $data + ['page_id' => $this->pageId],
+                        $project,
+                        array_replace($data, ['page_id' => $this->getPage()->getKey()]),
                         $this->currentUser(),
                     );
 
@@ -197,31 +257,34 @@ class ProjectPageDetail extends ResourcePage implements HasTable
 
                     Notification::make()->title('Page updated')->success()->send();
                 }),
-            Action::make('markRemoved')
-                ->label('Mark removed')
-                ->icon(Heroicon::OutlinedNoSymbol)
-                ->color('danger')
-                ->requiresConfirmation()
-                ->modalDescription('The page stays in the project as history and keeps all optimisation records.')
-                ->visible(fn (): bool => ! $this->getPage()->isRemoved())
-                ->authorize(fn (): bool => Gate::allows('setStatus', $this->getPage()))
-                ->action(function (): void {
-                    Gate::authorize('setStatus', $this->getPage());
+            // Less common and destructive actions live behind "More" so they never compete with Record optimisation.
+            ActionGroup::make([
+                Action::make('markRemoved')
+                    ->label('Mark removed')
+                    ->icon(Heroicon::OutlinedNoSymbol)
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalDescription('The page stays in the project as history and keeps all optimisation records.')
+                    ->visible(fn (): bool => ! $this->getPage()->isRemoved())
+                    ->authorize(fn (): bool => Gate::allows('setStatus', $this->getPage()))
+                    ->action(function (): void {
+                        Gate::authorize('setStatus', $this->getPage());
 
-                    app(SetPageStatusAction::class)->handle($this->getPage(), PageStatus::Removed);
-                }),
-            Action::make('reactivate')
-                ->label('Reactivate')
-                ->icon(Heroicon::OutlinedCheckCircle)
-                ->color('success')
-                ->requiresConfirmation()
-                ->visible(fn (): bool => $this->getPage()->isRemoved())
-                ->authorize(fn (): bool => Gate::allows('setStatus', $this->getPage()))
-                ->action(function (): void {
-                    Gate::authorize('setStatus', $this->getPage());
+                        app(SetPageStatusAction::class)->handle($this->getPage(), PageStatus::Removed);
+                    }),
+                Action::make('reactivate')
+                    ->label('Reactivate')
+                    ->icon(Heroicon::OutlinedCheckCircle)
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (): bool => $this->getPage()->isRemoved())
+                    ->authorize(fn (): bool => Gate::allows('setStatus', $this->getPage()))
+                    ->action(function (): void {
+                        Gate::authorize('setStatus', $this->getPage());
 
-                    app(SetPageStatusAction::class)->handle($this->getPage(), PageStatus::Active);
-                }),
+                        app(SetPageStatusAction::class)->handle($this->getPage(), PageStatus::Active);
+                    }),
+            ])->label('More')->icon(Heroicon::OutlinedEllipsisHorizontal)->color('gray')->button(),
         ];
     }
 }

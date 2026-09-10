@@ -109,7 +109,7 @@ class ProjectContentUiTest extends TestCase
             ->set('selectedView', 'unscheduled')
             ->assertCanSeeTableRecords([$unscheduled])
             ->assertCanNotSeeTableRecords([$octoberItem])
-            ->assertSee('Unscheduled view')
+            ->assertSee('Unscheduled content')
             ->set('selectedView', 'all')
             ->assertCanSeeTableRecords([$unscheduled, $octoberItem])
             ->set('selectedView', (string) $october->id)
@@ -131,7 +131,7 @@ class ProjectContentUiTest extends TestCase
         $this->get(ProjectResource::getUrl('content', ['record' => $bare]))
             ->assertOk()
             ->assertSee('3 / No target')
-            ->assertSee('No target configured for this month')
+            ->assertSee('No blog target was configured for this reporting month.')
             ->assertDontSee('3 / 0');
 
         ContentItem::factory()->count(10)->forCycle($this->september)->type(ContentType::Blog)->published()->create();

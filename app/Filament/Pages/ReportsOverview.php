@@ -17,6 +17,7 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -30,7 +31,8 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 /**
  * Global reports overview: every monthly report the user may see, with
  * live readiness. Actions only navigate into the existing project report
- * editor; no report logic lives here.
+ * editor; no report logic lives here. Presentation reads the existing
+ * overview query and readiness service only.
  */
 class ReportsOverview extends Page implements HasTable
 {
@@ -64,12 +66,44 @@ class ReportsOverview extends Page implements HasTable
         abort_unless(static::canAccess(), 403);
     }
 
+    public function getSubheading(): ?string
+    {
+        return 'Review report progress across your accessible projects.';
+    }
+
     protected function currentUser(): User
     {
         /** @var User $user */
         $user = Filament::auth()->user();
 
         return $user;
+    }
+
+    /**
+     * Reports per status across the accessible projects, plus corrections in
+     * progress: one grouped query and one count, independent of the page size.
+     *
+     * @return array{draft: int, ready_for_review: int, final: int, correction: int}
+     */
+    public function getStatusCounts(): array
+    {
+        $overview = app(ReportsOverviewQuery::class);
+
+        // Same joins and scoping as the table; only the selection changes.
+        $byStatus = $overview->for($this->currentUser())
+            ->toBase()
+            ->reorder()
+            ->select('monthly_reports.status')
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('monthly_reports.status')
+            ->pluck('total', 'status');
+
+        return [
+            'draft' => (int) ($byStatus[ReportStatus::Draft->value] ?? 0),
+            'ready_for_review' => (int) ($byStatus[ReportStatus::ReadyForReview->value] ?? 0),
+            'final' => (int) ($byStatus[ReportStatus::Final->value] ?? 0),
+            'correction' => $overview->corrections($overview->for($this->currentUser()))->reorder()->count(),
+        ];
     }
 
     /**
@@ -98,8 +132,9 @@ class ReportsOverview extends Page implements HasTable
         return $table
             ->query(fn (): Builder => $overview->for($this->currentUser()))
             ->columns([
-                TextColumn::make('monthlyCycle.project.client.name')->label('Client'),
-                TextColumn::make('monthlyCycle.project.name')->label('Project')
+                TextColumn::make('monthlyCycle.project.name')->label('Client / Project')
+                    ->weight(FontWeight::SemiBold)
+                    ->description(fn (MonthlyReport $record): ?string => $record->monthlyCycle->project->client?->name)
                     ->url(fn (MonthlyReport $record): string => ProjectResource::getUrl('view', ['record' => $record->monthlyCycle->project])),
                 TextColumn::make('period')->label('Period')
                     ->state(fn (MonthlyReport $record): string => $record->monthlyCycle->periodLabel()),
@@ -112,12 +147,11 @@ class ReportsOverview extends Page implements HasTable
                 TextColumn::make('readiness')->label('Readiness')
                     ->state(fn (MonthlyReport $record): string => $this->readinessFor($record)->percentage().'%')
                     ->badge()
-                    ->color(fn (MonthlyReport $record): string => $this->readinessFor($record)->isReady() ? 'success' : 'warning'),
-                TextColumn::make('required_sections')->label('Required sections')
-                    ->state(fn (MonthlyReport $record): string => ($r = $this->readinessFor($record))->completedRequiredCount().' / '.$r->requiredCount()),
-                TextColumn::make('finalized_at')->label('Finalized')->dateTime('j M Y H:i')->placeholder('—'),
-                TextColumn::make('finalizedBy.name')->label('Finalized by')->placeholder('—'),
-                TextColumn::make('monthlyCycle.project.primarySeoUser.name')->label('Primary SEO')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                    ->color(fn (MonthlyReport $record): string => $this->readinessFor($record)->isReady() ? 'success' : 'warning')
+                    ->description(fn (MonthlyReport $record): string => ($r = $this->readinessFor($record))->completedRequiredCount().' / '.$r->requiredCount().' required'),
+                TextColumn::make('monthlyCycle.project.primarySeoUser.name')->label('Primary SEO')->placeholder('—')->toggleable(),
+                TextColumn::make('finalized_at')->label('Finalised')->date('j M Y')->placeholder('—')
+                    ->description(fn (MonthlyReport $record): ?string => $record->finalizedBy?->name),
             ])
             ->filters([
                 SelectFilter::make('period')->label('Reporting period')
@@ -156,14 +190,18 @@ class ReportsOverview extends Page implements HasTable
                     ->query(fn (Builder $query): Builder => $overview->corrections($query)),
             ])
             ->searchable()
+            ->searchPlaceholder('Search client or project')
             ->searchUsing(fn (Builder $query, string $search): Builder => $overview->search($query, $search))
             ->recordActions([
                 Action::make('open')
                     ->label(fn (MonthlyReport $record): string => $record->isFinal() ? 'View' : 'Open')
-                    ->icon(Heroicon::OutlinedPencilSquare)
+                    ->icon(fn (MonthlyReport $record): Heroicon => $record->isFinal() ? Heroicon::OutlinedEye : Heroicon::OutlinedPencilSquare)
+                    ->link()
+                    ->size('sm')
                     ->url(fn (MonthlyReport $record): string => ProjectResource::getUrl('report', ['record' => $record->monthlyCycle->project, 'report' => $record])),
             ])
             ->toolbarActions([])
+            ->emptyStateIcon(Heroicon::OutlinedDocumentChartBar)
             ->emptyStateHeading('No reports yet')
             ->emptyStateDescription('Reports appear once a draft has been started for a reporting month.');
     }

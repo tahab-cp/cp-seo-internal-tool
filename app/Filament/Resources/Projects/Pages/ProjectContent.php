@@ -9,6 +9,7 @@ use App\Enums\ContentStatus;
 use App\Enums\ContentType;
 use App\Enums\MonthlyCycleStatus;
 use App\Exceptions\LockedMonthlyCycleException;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\ContentItemForm;
 use App\Models\ContentItem;
@@ -19,6 +20,7 @@ use App\Services\MonthlyCycles\TargetProgressService;
 use App\Support\MonthlyCycles\CyclePeriod;
 use App\Support\Targets\TargetProgress;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -26,6 +28,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page as ResourcePage;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -47,10 +50,11 @@ use InvalidArgumentException;
  * for unrelated projects), the page requires the project `view` ability
  * (403), the table runs through ContentItem::scopeAccessibleBy() and every
  * action is authorized by ContentItemPolicy / ProjectPolicy. Not a global
- * sidebar module.
+ * sidebar module. Presentation reads the existing records and services only.
  */
 class ProjectContent extends ResourcePage implements HasTable
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
     use InteractsWithTable;
 
@@ -61,8 +65,6 @@ class ProjectContent extends ResourcePage implements HasTable
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-content';
-
-    protected static ?string $title = 'Content';
 
     /**
      * A monthly cycle id, "unscheduled" (project-level items) or "all".
@@ -91,9 +93,14 @@ class ProjectContent extends ResourcePage implements HasTable
         $this->resetTable();
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -129,11 +136,38 @@ class ProjectContent extends ResourcePage implements HasTable
         return $this->getProject()->monthlyCycles()->find((int) $this->selectedView);
     }
 
+    public function isUnscheduledView(): bool
+    {
+        return $this->selectedView === self::UNSCHEDULED;
+    }
+
     public function getBlogsProgress(): ?TargetProgress
     {
         $cycle = $this->getSelectedCycle();
 
         return $cycle ? app(TargetProgressService::class)->blogs($cycle) : null;
+    }
+
+    /**
+     * Items per status in the current view (every status, in workflow order),
+     * from one grouped query over the same scoped records as the table.
+     *
+     * @return array<string, int>
+     */
+    public function getWorkflowSummary(): array
+    {
+        $counts = $this->scopedQuery()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $summary = [];
+
+        foreach (ContentStatus::cases() as $status) {
+            $summary[$status->value] = (int) ($counts[$status->value] ?? 0);
+        }
+
+        return $summary;
     }
 
     protected function defaultCycle(): ?MonthlyCycle
@@ -150,18 +184,30 @@ class ProjectContent extends ResourcePage implements HasTable
         return $this->getSelectedCycle()?->getKey();
     }
 
+    /**
+     * The records of the current view: selected month, unscheduled, or all.
+     *
+     * @return Builder<ContentItem>
+     */
+    protected function scopedQuery(): Builder
+    {
+        return ContentItem::query()
+            ->where('project_id', $this->getProject()->getKey())
+            ->accessibleBy($this->currentUser())
+            ->when($this->isUnscheduledView(), fn (Builder $query) => $query->unscheduled())
+            ->when($this->getSelectedCycle(), fn (Builder $query, MonthlyCycle $cycle) => $query->where('monthly_cycle_id', $cycle->getKey()));
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => ContentItem::query()
-                ->where('project_id', $this->getProject()->getKey())
-                ->accessibleBy($this->currentUser())
-                ->when($this->selectedView === self::UNSCHEDULED, fn (Builder $query) => $query->unscheduled())
-                ->when($this->getSelectedCycle(), fn (Builder $query, MonthlyCycle $cycle) => $query->where('monthly_cycle_id', $cycle->getKey()))
-                ->with(['assignee', 'targetKeyword', 'monthlyCycle']))
+            ->query(fn (): Builder => $this->scopedQuery()->with(['assignee', 'targetKeyword', 'monthlyCycle']))
             ->defaultSort('planned_publish_date')
             ->columns([
                 TextColumn::make('title')
+                    ->label('Content')
+                    ->weight(FontWeight::SemiBold)
+                    ->wrap()
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(
                         fn (Builder $query) => $query
                             ->where('title', 'like', "%{$search}%")
@@ -169,33 +215,31 @@ class ProjectContent extends ResourcePage implements HasTable
                             ->orWhereHas('targetKeyword', fn (Builder $keyword) => $keyword->where('keyword', 'like', "%{$search}%")),
                     ))
                     ->sortable()
-                    ->description(fn (ContentItem $record): string => $record->monthlyCycle?->periodLabel() ?? 'Unscheduled'),
+                    ->description(fn (ContentItem $record): string => implode(' · ', array_filter([
+                        $record->targetKeyword ? 'Target: '.$record->targetKeyword->keyword : 'No target keyword',
+                        $this->selectedView === self::ALL ? ($record->monthlyCycle?->periodLabel() ?? 'Unscheduled') : null,
+                    ]))),
                 TextColumn::make('content_type')
                     ->label('Type')
                     ->badge()
                     ->sortable(),
-                TextColumn::make('targetKeyword.keyword')
-                    ->label('Target keyword')
-                    ->placeholder('—'),
                 TextColumn::make('assignee.name')
-                    ->label('Assignee')
+                    ->label('Owner')
                     ->placeholder('Unassigned'),
-                TextColumn::make('planned_publish_date')
-                    ->label('Planned')
-                    ->date('j M Y')
-                    ->sortable()
-                    ->placeholder('—'),
-                TextColumn::make('published_at')
-                    ->label('Published')
-                    ->dateTime('j M Y')
-                    ->sortable()
-                    ->placeholder('—')
-                    ->url(fn (ContentItem $record): ?string => $record->published_url)
-                    ->openUrlInNewTab(),
+                TextColumn::make('dates')
+                    ->label('Dates')
+                    ->state(fn (ContentItem $record): array => array_filter([
+                        'Planned: '.($record->planned_publish_date?->format('j M Y') ?? '—'),
+                        $record->published_at ? 'Published: '.$record->published_at->format('j M Y') : null,
+                    ]))
+                    ->listWithLineBreaks()
+                    ->size('xs')
+                    ->sortable(['planned_publish_date']),
                 TextColumn::make('status')
                     ->badge()
                     ->sortable(),
             ])
+            ->searchPlaceholder('Search title, keyword or URL')
             ->filters([
                 SelectFilter::make('content_type')
                     ->label('Type')
@@ -210,6 +254,8 @@ class ProjectContent extends ResourcePage implements HasTable
                 Action::make('edit')
                     ->label('Edit')
                     ->icon(Heroicon::OutlinedPencilSquare)
+                    ->link()
+                    ->size('sm')
                     ->modalHeading('Edit content')
                     ->schema(fn (ContentItem $record): array => ContentItemForm::components($this->getProject(), $record))
                     ->fillForm(fn (ContentItem $record): array => ContentItemForm::fillFromItem($record))
@@ -219,21 +265,12 @@ class ProjectContent extends ResourcePage implements HasTable
 
                         $this->runDomain($action, fn () => app(UpdateContentItemAction::class)->handle($record, ContentItemForm::attributesFromData($data)), 'Content updated');
                     }),
-                Action::make('advance')
-                    ->label(fn (ContentItem $record): string => 'Mark '.($record->status->next()?->getLabel() ?? ''))
-                    ->icon(Heroicon::OutlinedArrowRight)
-                    ->color('info')
-                    ->visible(fn (ContentItem $record): bool => $record->status->next() !== null && $record->status->next() !== ContentStatus::Published)
-                    ->authorize(fn (ContentItem $record): bool => Gate::allows('setStatus', $record))
-                    ->action(function (ContentItem $record, Action $action): void {
-                        Gate::authorize('setStatus', $record);
-
-                        $this->runDomain($action, fn () => app(SetContentStatusAction::class)->handle($record, $record->status->next()), 'Status updated');
-                    }),
                 Action::make('publish')
                     ->label('Publish')
                     ->icon(Heroicon::OutlinedCheckCircle)
                     ->color('success')
+                    ->link()
+                    ->size('sm')
                     ->modalHeading('Publish content')
                     ->modalDescription('Attribute the item to a reporting month and record where it was published.')
                     ->schema(fn (): array => [
@@ -274,56 +311,79 @@ class ProjectContent extends ResourcePage implements HasTable
 
                         $this->runDomain($action, fn () => app(SetContentStatusAction::class)->handle($record, ContentStatus::Published, $data), 'Content published');
                     }),
-                Action::make('setStatus')
-                    ->label('Status')
-                    ->icon(Heroicon::OutlinedArrowPath)
-                    ->color('gray')
-                    ->modalHeading('Change status')
-                    ->modalWidth('sm')
-                    ->schema([
-                        Select::make('status')
-                            ->options(collect(ContentStatus::cases())
-                                ->reject(fn (ContentStatus $status): bool => $status === ContentStatus::Published)
-                                ->mapWithKeys(fn (ContentStatus $status): array => [$status->value => $status->getLabel()])
-                                ->all())
-                            ->required()
-                            ->native(false)
-                            ->helperText('Use “Publish” to mark content published.'),
-                    ])
-                    ->fillForm(fn (ContentItem $record): array => ['status' => $record->isPublished() ? null : $record->status->value])
-                    ->authorize(fn (ContentItem $record): bool => Gate::allows('setStatus', $record))
-                    ->action(function (ContentItem $record, array $data, Action $action): void {
-                        Gate::authorize('setStatus', $record);
+                // Workflow steps and the status override live behind "•••" to keep rows compact.
+                ActionGroup::make([
+                    Action::make('advance')
+                        ->label(fn (ContentItem $record): string => 'Mark '.($record->status->next()?->getLabel() ?? ''))
+                        ->icon(Heroicon::OutlinedArrowRight)
+                        ->color('info')
+                        ->visible(fn (ContentItem $record): bool => $record->status->next() !== null && $record->status->next() !== ContentStatus::Published)
+                        ->authorize(fn (ContentItem $record): bool => Gate::allows('setStatus', $record))
+                        ->action(function (ContentItem $record, Action $action): void {
+                            Gate::authorize('setStatus', $record);
 
-                        $this->runDomain($action, fn () => app(SetContentStatusAction::class)->handle($record, $data['status']), 'Status updated');
-                    }),
+                            $this->runDomain($action, fn () => app(SetContentStatusAction::class)->handle($record, $record->status->next()), 'Status updated');
+                        }),
+                    Action::make('setStatus')
+                        ->label('Change status')
+                        ->icon(Heroicon::OutlinedArrowPath)
+                        ->modalHeading('Change status')
+                        ->modalWidth('sm')
+                        ->schema([
+                            Select::make('status')
+                                ->options(collect(ContentStatus::cases())
+                                    ->reject(fn (ContentStatus $status): bool => $status === ContentStatus::Published)
+                                    ->mapWithKeys(fn (ContentStatus $status): array => [$status->value => $status->getLabel()])
+                                    ->all())
+                                ->required()
+                                ->native(false)
+                                ->helperText('Use “Publish” to mark content published.'),
+                        ])
+                        ->fillForm(fn (ContentItem $record): array => ['status' => $record->isPublished() ? null : $record->status->value])
+                        ->authorize(fn (ContentItem $record): bool => Gate::allows('setStatus', $record))
+                        ->action(function (ContentItem $record, array $data, Action $action): void {
+                            Gate::authorize('setStatus', $record);
+
+                            $this->runDomain($action, fn () => app(SetContentStatusAction::class)->handle($record, $data['status']), 'Status updated');
+                        }),
+                ]),
             ])
             ->toolbarActions([])
+            ->paginated([10, 25, 50])
             ->emptyStateIcon(Heroicon::OutlinedDocumentText)
-            ->emptyStateHeading('No content yet')
-            ->emptyStateDescription('Plan blogs and pages here, track them through writing and review, and publish them against a reporting month. Only published blogs count toward the monthly target.');
+            ->emptyStateHeading(fn (): string => $this->isUnscheduledView() ? 'No unscheduled content' : 'No content planned yet')
+            ->emptyStateDescription(fn (): string => $this->isUnscheduledView()
+                ? 'Content not assigned to a reporting month will appear here.'
+                : 'Add blogs, landing pages and other SEO content to track their progress through the month.')
+            ->emptyStateActions([
+                $this->addContentAction(Action::make('createFirstContent')),
+            ]);
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
-            Action::make('createContent')
-                ->label('Add content')
-                ->icon(Heroicon::OutlinedPlus)
-                ->modalHeading('Add content')
-                ->schema(fn (): array => ContentItemForm::components($this->getProject(), null, $this->defaultCycleIdForForms()))
-                ->authorize(fn (): bool => Gate::allows('manageContent', $this->getProject()))
-                ->action(function (array $data, Action $action): void {
-                    Gate::authorize('manageContent', $this->getProject());
-
-                    $this->runDomain($action, fn () => app(CreateContentItemAction::class)->handle($this->getProject(), ContentItemForm::attributesFromData($data)), 'Content added');
-                }),
+            $this->addContentAction(Action::make('createContent')),
         ];
+    }
+
+    /**
+     * The single "Add content" workflow (ContentItemForm + CreateContentItemAction),
+     * used by the header and the empty state alike.
+     */
+    protected function addContentAction(Action $action): Action
+    {
+        return $action
+            ->label('Add content')
+            ->icon(Heroicon::OutlinedPlus)
+            ->modalHeading('Add content')
+            ->schema(fn (): array => ContentItemForm::components($this->getProject(), null, $this->defaultCycleIdForForms()))
+            ->authorize(fn (): bool => Gate::allows('manageContent', $this->getProject()))
+            ->action(function (array $data, Action $action): void {
+                Gate::authorize('manageContent', $this->getProject());
+
+                $this->runDomain($action, fn () => app(CreateContentItemAction::class)->handle($this->getProject(), ContentItemForm::attributesFromData($data)), 'Content added');
+            });
     }
 
     protected function runDomain(Action $action, callable $call, string $successTitle): void

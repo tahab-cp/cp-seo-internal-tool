@@ -120,7 +120,7 @@ class ProjectKeywordsUiTest extends TestCase
 
         $this->detail($keyword)
             ->assertSee('luxury villas london')
-            ->assertSee('No ranking snapshots yet')
+            ->assertSee('No ranking history yet')
             ->callAction('recordRanking', data: ['monthly_cycle_id' => $this->september->id, 'checked_at' => '2026-09-02 09:00', 'source' => 'manual', 'position' => 24])
             ->assertHasNoFormErrors()
             ->assertNotified('Ranking recorded');
@@ -206,7 +206,7 @@ class ProjectKeywordsUiTest extends TestCase
             ->assertHasNoFormErrors()
             ->callAction('editKeyword', data: ['keyword' => 'frozen keyword', 'status' => 'active', 'search_volume' => 500])
             ->assertHasNoFormErrors()
-            ->callAction('setStatus', data: ['status' => 'paused']);
+            ->callAction('pause');
 
         $this->assertSame(500, $keyword->fresh()->search_volume);
         $this->assertSame('paused', $keyword->fresh()->status->value);

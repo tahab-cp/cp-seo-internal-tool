@@ -173,7 +173,7 @@ class ProjectReportSectionsTest extends TestCase
 
         $this->get(ProjectResource::getUrl('report-sections', ['record' => $this->project]))
             ->assertOk()
-            ->assertSee('Changes affect future reports only. Existing monthly reports keep their snapshotted configuration.')
+            ->assertSee('Changes affect future reports only. Existing reports keep their saved section layout.')
             ->assertSee('data-report-section="executive_summary"', false);
 
         // Mounting initialised the defaults for an existing project.

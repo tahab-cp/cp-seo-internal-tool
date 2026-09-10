@@ -241,7 +241,7 @@ class MonthlyNoteTest extends TestCase
         $this->get(ProjectResource::getUrl('monthly-work', ['record' => $this->project]))
             ->assertOk()
             ->assertSee('No wins recorded yet')
-            ->assertSee('Capture notable results during the month so reporting is easier later.')
+            ->assertSee('Add notable results or positive progress from this month.')
             ->assertSee('data-empty-lane="challenges"', false)
             ->assertSee('data-empty-lane="recommendations"', false);
 
@@ -261,7 +261,10 @@ class MonthlyNoteTest extends TestCase
             ->assertSee('Top spot')
             ->assertSee('Site migration slipped.')
             ->assertSee('Publish the pricing guide.')
-            ->assertDontSee('data-empty-lane', false);
+            ->assertDontSee('data-empty-lane="wins"', false)
+            ->assertDontSee('data-empty-lane="challenges"', false)
+            ->assertDontSee('data-empty-lane="focus"', false)
+            ->assertSee('data-empty-lane="recommendations"', false);
 
         $win = $this->september->monthlyNotes()->ofType(MonthlyNoteType::Win)->firstOrFail();
         $this->assertSame($this->executive->id, $win->created_by);

@@ -80,7 +80,8 @@ class ProjectOverviewOperationsTest extends TestCase
 
         $this->get(ProjectResource::getUrl('view', ['record' => $bare]))->assertOk()
             ->assertSee('data-operations-missing-cycle', false)
-            ->assertSee('No monthly cycle exists for September 2026')
+            ->assertSee('No monthly cycle for September 2026.')
+            ->assertSee('data-operations-cycle-status="none"', false)
             ->assertSee(ProjectResource::getUrl('monthly-cycles', ['record' => $bare]));
 
         $this->assertSame(0, $bare->monthlyCycles()->count());

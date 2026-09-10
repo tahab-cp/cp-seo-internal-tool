@@ -132,8 +132,10 @@ class ReportVersionUiTest extends TestCase
                 ->assertDontSee('data-correction-banner', false);
 
             Livewire::test(ProjectReports::class, ['record' => $this->project->getRouteKey()])
-                ->assertSee('Final · v2')
-                ->assertSee('1 superseded version');
+                ->assertSee('Final')
+                ->assertSee('v2')
+                ->assertSee('1 superseded version')
+                ->assertSee('data-history-revision="1"', false);
         }
 
         $this->assertSame(

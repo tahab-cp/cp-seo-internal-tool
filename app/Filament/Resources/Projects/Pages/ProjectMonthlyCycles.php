@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Projects\Pages;
 
 use App\Actions\MonthlyCycles\EnsureMonthlyCycleAction;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\MonthlyCycle;
 use App\Models\Project;
@@ -16,9 +17,9 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Minimal monthly-cycle view for a project: available months, the selected
- * cycle's status and its *stored* target snapshot. Progress, tasks and
- * reporting arrive in later milestones.
+ * Project → Monthly cycles: the project's reporting months, the selected
+ * month's status and the targets stored for it, with links into that
+ * month's work. Presentation reads the existing records only.
  *
  * The record is resolved through ProjectResource::getEloquentQuery(), so an
  * unrelated project does not exist for an SEO Executive (404), and the
@@ -26,13 +27,12 @@ use Illuminate\Support\Facades\Gate;
  */
 class ProjectMonthlyCycles extends Page
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
 
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-monthly-cycles';
-
-    protected static ?string $title = 'Monthly cycles';
 
     public ?int $selectedCycleId = null;
 
@@ -45,9 +45,14 @@ class ProjectMonthlyCycles extends Page
         $this->selectedCycleId = $this->defaultCycle()?->getKey();
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -59,13 +64,16 @@ class ProjectMonthlyCycles extends Page
     }
 
     /**
+     * Every cycle with its stored targets, the user who locked it and its
+     * report, newest first (one query set for the whole screen).
+     *
      * @return Collection<int, MonthlyCycle>
      */
     public function getCycles(): Collection
     {
         return $this->getProject()
             ->monthlyCycles()
-            ->with('targets')
+            ->with(['targets', 'lockedBy', 'monthlyReport'])
             ->latestPeriodFirst()
             ->get();
     }
@@ -88,6 +96,25 @@ class ProjectMonthlyCycles extends Page
             ->exists();
     }
 
+    /**
+     * Links into the selected month's work: existing routes only.
+     *
+     * @return list<array{key: string, label: string, icon: string, url: string}>
+     */
+    public function getWorkLinks(MonthlyCycle $cycle): array
+    {
+        $project = $this->getRecord();
+        $report = $cycle->monthlyReport;
+
+        return [
+            ['key' => 'tasks', 'label' => 'View tasks', 'icon' => 'heroicon-o-clipboard-document-list', 'url' => ProjectResource::getUrl('tasks', ['record' => $project, 'cycle' => $cycle->getKey()])],
+            ['key' => 'monthly-work', 'label' => 'Monthly work', 'icon' => 'heroicon-o-light-bulb', 'url' => ProjectResource::getUrl('monthly-work', ['record' => $project, 'cycle' => $cycle->getKey()])],
+            $report
+                ? ['key' => 'report', 'label' => $report->isFinal() ? 'View report' : 'Open report', 'icon' => 'heroicon-o-document-chart-bar', 'url' => ProjectResource::getUrl('report', ['record' => $project, 'report' => $report])]
+                : ['key' => 'reports', 'label' => 'Reports', 'icon' => 'heroicon-o-document-chart-bar', 'url' => ProjectResource::getUrl('reports', ['record' => $project])],
+        ];
+    }
+
     protected function defaultCycle(): ?MonthlyCycle
     {
         $cycles = $this->getCycles();
@@ -100,17 +127,13 @@ class ProjectMonthlyCycles extends Page
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
             Action::make('ensureCurrentMonth')
-                ->label(fn (): string => 'Ensure '.$this->getCurrentPeriod()->label())
+                ->label(fn (): string => 'Create '.$this->getCurrentPeriod()->label().' cycle')
                 ->icon(Heroicon::OutlinedCalendarDays)
                 ->requiresConfirmation()
-                ->modalHeading(fn (): string => 'Create the '.$this->getCurrentPeriod()->label().' cycle')
-                ->modalDescription('The project\'s current package targets and overrides will be snapshotted for this month.')
+                ->modalHeading(fn (): string => 'Create the '.$this->getCurrentPeriod()->label().' cycle?')
+                ->modalDescription('The project\'s current package targets and overrides will be saved as this month\'s targets.')
+                ->modalSubmitActionLabel('Create cycle')
                 ->authorize(fn (): bool => Gate::allows('ensureMonthlyCycle', $this->getProject()))
                 ->visible(fn (): bool => $this->currentCycleIsMissing())
                 ->action(function (): void {

@@ -10,11 +10,13 @@ use App\Actions\Analytics\SaveGscPageMetricsAction;
 use App\Actions\Analytics\SaveGscQueryMetricsAction;
 use App\Exceptions\LockedMonthlyCycleException;
 use App\Filament\Resources\Imports\ImportBatchResource;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\AnalyticsForms;
 use App\Models\AuthorityMetric;
 use App\Models\Ga4MonthlyMetric;
 use App\Models\GscMonthlyMetric;
+use App\Models\GscPageMetric;
 use App\Models\MonthlyCycle;
 use App\Models\Project;
 use App\Models\User;
@@ -38,16 +40,16 @@ use InvalidArgumentException;
  * (403), the cycle is always resolved from the project's own cycles, and
  * every save is authorized by MonthlyCyclePolicy::manageAnalytics and
  * re-checked inside the analytics actions. Not a global sidebar module.
+ * Presentation reads the existing records only.
  */
 class ProjectAnalytics extends ResourcePage
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
 
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-analytics';
-
-    protected static ?string $title = 'Analytics';
 
     /**
      * The selected monthly cycle id ('' when the project has no cycles).
@@ -69,9 +71,14 @@ class ProjectAnalytics extends ResourcePage
         }
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -162,14 +169,36 @@ class ProjectAnalytics extends ResourcePage
         return $cycle !== null && Gate::allows('manageAnalytics', $cycle);
     }
 
+    /**
+     * Display form of a landing page URL: "/path" on the project's own site,
+     * "host/path" elsewhere. Presentation only; the full URL stays available.
+     */
+    public function landingPagePath(GscPageMetric $metric): string
+    {
+        $path = parse_url($metric->page_url, PHP_URL_PATH) ?: '/';
+        $host = strtolower((string) parse_url($metric->page_url, PHP_URL_HOST));
+        $projectHost = strtolower((string) parse_url((string) $this->getProject()->website_url, PHP_URL_HOST));
+
+        $display = $host !== '' && preg_replace('/^www\./', '', $host) !== preg_replace('/^www\./', '', $projectHost) ? $host.$path : $path;
+
+        return mb_strlen($display) > 60 ? mb_substr($display, 0, 57).'…' : $display;
+    }
+
+    /**
+     * "1m 34s" from stored seconds (presentation only).
+     */
+    public function formatDuration(?int $seconds): string
+    {
+        if ($seconds === null) {
+            return '—';
+        }
+
+        return $seconds < 60 ? $seconds.'s' : intdiv($seconds, 60).'m '.($seconds % 60).'s';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
             Action::make('importCsv')
                 ->label('Import CSV')
                 ->icon(Heroicon::OutlinedArrowUpTray)
@@ -183,6 +212,7 @@ class ProjectAnalytics extends ResourcePage
         return Action::make($name)
             ->label($label)
             ->icon(Heroicon::OutlinedPencilSquare)
+            ->color('gray')
             ->size('sm')
             ->modalHeading(fn (): string => $heading.' — '.($this->getSelectedCycle()?->periodLabel() ?? ''))
             ->modalSubmitActionLabel('Save')
@@ -191,7 +221,7 @@ class ProjectAnalytics extends ResourcePage
 
     public function editGscSummaryAction(): Action
     {
-        return $this->editAction('editGscSummary', 'Enter manually', 'Search Console summary')
+        return $this->editAction('editGscSummary', 'Edit summary', 'Search Console summary')
             ->modalWidth('lg')
             ->schema(AnalyticsForms::gscSummaryComponents())
             ->fillForm(fn (): array => AnalyticsForms::fillFromGscSummary($this->getGscSummary()))
@@ -224,7 +254,7 @@ class ProjectAnalytics extends ResourcePage
 
     public function editGa4SummaryAction(): Action
     {
-        return $this->editAction('editGa4Summary', 'Enter manually', 'Google Analytics summary')
+        return $this->editAction('editGa4Summary', 'Edit summary', 'Google Analytics summary')
             ->modalWidth('2xl')
             ->schema(AnalyticsForms::ga4SummaryComponents())
             ->fillForm(fn (): array => AnalyticsForms::fillFromGa4Summary($this->getGa4Summary()))
@@ -246,7 +276,7 @@ class ProjectAnalytics extends ResourcePage
 
     public function editAuthorityAction(): Action
     {
-        return $this->editAction('editAuthority', 'Enter manually', 'Site authority')
+        return $this->editAction('editAuthority', 'Edit metrics', 'Site authority')
             ->modalWidth('2xl')
             ->schema(AnalyticsForms::authorityComponents())
             ->fillForm(fn (): array => AnalyticsForms::fillFromAuthority($this->getAuthority()))

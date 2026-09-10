@@ -6,6 +6,7 @@ use App\Actions\Pages\CreatePageAction;
 use App\Actions\Pages\SetPageStatusAction;
 use App\Actions\Pages\UpdatePageAction;
 use App\Enums\PageStatus;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\PageForm;
 use App\Models\MonthlyCycle;
@@ -16,6 +17,7 @@ use App\Services\MonthlyCycles\TargetProgressService;
 use App\Support\MonthlyCycles\CyclePeriod;
 use App\Support\Targets\TargetProgress;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
@@ -43,6 +45,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class ProjectPages extends ResourcePage implements HasTable
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
     use InteractsWithTable;
 
@@ -67,9 +70,14 @@ class ProjectPages extends ResourcePage implements HasTable
             : $this->defaultCycle()?->getKey();
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -114,6 +122,14 @@ class ProjectPages extends ResourcePage implements HasTable
         return $cycle ? app(TargetProgressService::class)->pagesOptimised($cycle) : null;
     }
 
+    /**
+     * Pages the project tracks (master data count, all statuses).
+     */
+    public function getPagesTracked(): int
+    {
+        return $this->getProject()->pages()->count();
+    }
+
     protected function defaultCycle(): ?MonthlyCycle
     {
         $cycles = $this->getCycles();
@@ -129,26 +145,31 @@ class ProjectPages extends ResourcePage implements HasTable
             ->query(fn (): Builder => Page::query()
                 ->where('project_id', $this->getProject()->getKey())
                 ->accessibleBy($this->currentUser())
-                ->withMax('optimizations', 'optimized_at'))
+                ->withMax('optimizations', 'optimized_at')
+                // One grouped sub-select, no per-row query: optimisation events in the selected month.
+                ->withCount(['optimizations as month_optimizations_count' => fn (Builder $query) => $query->where('monthly_cycle_id', $this->selectedCycleId ?? 0)]))
             ->defaultSort('url')
             ->columns([
                 TextColumn::make('title')
                     ->label('Page')
                     ->state(fn (Page $record): string => $record->displayName())
+                    ->description(fn (Page $record): string => $this->pathOf($record))
+                    ->weight('semibold')
                     ->searchable(['title', 'url'])
                     ->sortable()
                     ->url(fn (Page $record): string => ProjectResource::getUrl('page', ['record' => $this->getRecord(), 'page' => $record])),
-                TextColumn::make('url')
-                    ->label('URL')
-                    ->limit(60)
-                    ->tooltip(fn (Page $record): string => $record->url)
-                    ->sortable(),
                 TextColumn::make('page_type')
-                    ->label('Page type')
+                    ->label('Type')
                     ->placeholder('—'),
                 TextColumn::make('status')
                     ->badge()
                     ->sortable(),
+                TextColumn::make('month_optimizations_count')
+                    ->label('This month')
+                    ->state(fn (Page $record): ?int => $record->month_optimizations_count > 0 ? (int) $record->month_optimizations_count : null)
+                    ->placeholder('—')
+                    ->alignRight()
+                    ->tooltip('Optimisation events recorded in the selected reporting month'),
                 TextColumn::make('optimizations_max_optimized_at')
                     ->label('Last optimised')
                     ->dateTime('j M Y')
@@ -186,66 +207,94 @@ class ProjectPages extends ResourcePage implements HasTable
 
                         Notification::make()->title('Page updated')->success()->send();
                     }),
-                Action::make('markRemoved')
-                    ->label('Mark removed')
-                    ->icon(Heroicon::OutlinedNoSymbol)
-                    ->color('danger')
-                    ->requiresConfirmation()
-                    ->modalDescription('The page stays in the project as history and keeps all optimisation records. It can be reactivated later.')
-                    ->visible(fn (Page $record): bool => ! $record->isRemoved())
-                    ->authorize(fn (Page $record): bool => Gate::allows('setStatus', $record))
-                    ->action(function (Page $record): void {
-                        Gate::authorize('setStatus', $record);
+                ActionGroup::make([
+                    Action::make('open')
+                        ->label('Open live page')
+                        ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                        ->url(fn (Page $record): string => $record->url)
+                        ->openUrlInNewTab(),
+                    Action::make('setStatus')
+                        ->label('Change status')
+                        ->icon(Heroicon::OutlinedArrowPath)
+                        ->modalHeading('Change page status')
+                        ->modalWidth('sm')
+                        ->schema([
+                            Select::make('status')
+                                ->options(PageStatus::class)
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->fillForm(fn (Page $record): array => ['status' => $record->status->value])
+                        ->authorize(fn (Page $record): bool => Gate::allows('setStatus', $record))
+                        ->action(function (Page $record, array $data): void {
+                            Gate::authorize('setStatus', $record);
 
-                        app(SetPageStatusAction::class)->handle($record, PageStatus::Removed);
-                    }),
-                Action::make('setStatus')
-                    ->label('Status')
-                    ->icon(Heroicon::OutlinedArrowPath)
-                    ->color('gray')
-                    ->modalHeading('Change page status')
-                    ->modalWidth('sm')
-                    ->schema([
-                        Select::make('status')
-                            ->options(PageStatus::class)
-                            ->required()
-                            ->native(false),
-                    ])
-                    ->fillForm(fn (Page $record): array => ['status' => $record->status->value])
-                    ->authorize(fn (Page $record): bool => Gate::allows('setStatus', $record))
-                    ->action(function (Page $record, array $data): void {
-                        Gate::authorize('setStatus', $record);
+                            app(SetPageStatusAction::class)->handle($record, $data['status']);
+                        }),
+                    Action::make('markRemoved')
+                        ->label('Mark removed')
+                        ->icon(Heroicon::OutlinedNoSymbol)
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalDescription('The page stays in the project as history and keeps all optimisation records. It can be reactivated later.')
+                        ->visible(fn (Page $record): bool => ! $record->isRemoved())
+                        ->authorize(fn (Page $record): bool => Gate::allows('setStatus', $record))
+                        ->action(function (Page $record): void {
+                            Gate::authorize('setStatus', $record);
 
-                        app(SetPageStatusAction::class)->handle($record, $data['status']);
-                    }),
+                            app(SetPageStatusAction::class)->handle($record, PageStatus::Removed);
+                        }),
+                ])->tooltip('More'),
             ])
             ->toolbarActions([])
             ->emptyStateIcon(Heroicon::OutlinedDocumentText)
-            ->emptyStateHeading('No pages yet')
-            ->emptyStateDescription('Add the pages of this website that you optimise, then record optimisation work against them each month.');
+            ->emptyStateHeading('No pages added yet')
+            ->emptyStateDescription('Add the important pages from this website so you can record SEO optimisation work against them.')
+            ->emptyStateActions([
+                // The same Add page form and workflow as the header action, offered where the list is empty.
+                $this->addPageAction(Action::make('createFirstPage')->label('Add first page')),
+            ]);
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
-            Action::make('createPage')
-                ->label('Add page')
-                ->icon(Heroicon::OutlinedDocumentPlus)
-                ->modalHeading('Add page')
-                ->schema(fn (): array => PageForm::components($this->getProject()))
-                ->authorize(fn (): bool => Gate::allows('managePages', $this->getProject()))
-                ->action(function (array $data): void {
-                    Gate::authorize('managePages', $this->getProject());
-
-                    app(CreatePageAction::class)->handle($this->getProject(), $data);
-
-                    Notification::make()->title('Page added')->success()->send();
-                }),
+            $this->addPageAction(Action::make('createPage')->label('Add page')),
         ];
+    }
+
+    /**
+     * The single "Add page" workflow: PageForm + CreatePageAction, governed
+     * by the project's managePages ability.
+     */
+    protected function addPageAction(Action $action): Action
+    {
+        return $action
+            ->icon(Heroicon::OutlinedDocumentPlus)
+            ->modalHeading('Add page')
+            ->schema(fn (): array => PageForm::components($this->getProject()))
+            ->authorize(fn (): bool => Gate::allows('managePages', $this->getProject()))
+            ->action(function (array $data): void {
+                Gate::authorize('managePages', $this->getProject());
+
+                app(CreatePageAction::class)->handle($this->getProject(), $data);
+
+                Notification::make()->title('Page added')->success()->send();
+            });
+    }
+
+    /**
+     * The path shown under the page title (host + path when the page lives
+     * on another host than the project website).
+     */
+    protected function pathOf(Page $record): string
+    {
+        $path = $record->path ?: (parse_url($record->url, PHP_URL_PATH) ?: '/');
+        $host = strtolower((string) parse_url($record->url, PHP_URL_HOST));
+        $projectHost = strtolower((string) parse_url((string) $this->getProject()->website_url, PHP_URL_HOST));
+
+        $display = $host !== '' && preg_replace('/^www\./', '', $host) !== preg_replace('/^www\./', '', $projectHost) ? $host.$path : $path;
+
+        return mb_strlen($display) > 70 ? mb_substr($display, 0, 67).'…' : $display;
     }
 }

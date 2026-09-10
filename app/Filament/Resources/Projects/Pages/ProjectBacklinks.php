@@ -10,6 +10,7 @@ use App\Enums\BacklinkType;
 use App\Enums\ImportType;
 use App\Exceptions\LockedMonthlyCycleException;
 use App\Filament\Resources\Imports\ImportBatchResource;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\BacklinkForm;
 use App\Models\Backlink;
@@ -20,12 +21,14 @@ use App\Services\MonthlyCycles\TargetProgressService;
 use App\Support\MonthlyCycles\CyclePeriod;
 use App\Support\Targets\TargetProgress;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page as ResourcePage;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -36,6 +39,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -47,10 +51,11 @@ use InvalidArgumentException;
  * for unrelated projects), the page requires the project `view` ability
  * (403), the table runs through Backlink::scopeAccessibleBy() and every
  * action is authorized by BacklinkPolicy / ProjectPolicy. Not a global
- * sidebar module.
+ * sidebar module. Presentation reads the existing records and services only.
  */
 class ProjectBacklinks extends ResourcePage implements HasTable
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
     use InteractsWithTable;
 
@@ -59,8 +64,6 @@ class ProjectBacklinks extends ResourcePage implements HasTable
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-backlinks';
-
-    protected static ?string $title = 'Backlinks';
 
     /**
      * A monthly cycle id, or "all" for the all-time view.
@@ -89,9 +92,14 @@ class ProjectBacklinks extends ResourcePage implements HasTable
         $this->resetTable();
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -165,6 +173,18 @@ class ProjectBacklinks extends ResourcePage implements HasTable
         return $breakdown;
     }
 
+    /**
+     * Records in the current view (selected month, or all time), for the table summary line.
+     */
+    public function getRecordCount(): int
+    {
+        return Backlink::query()
+            ->where('project_id', $this->getProject()->getKey())
+            ->accessibleBy($this->currentUser())
+            ->when($this->getSelectedCycle(), fn (Builder $query, MonthlyCycle $cycle) => $query->where('monthly_cycle_id', $cycle->getKey()))
+            ->count();
+    }
+
     protected function defaultCycle(): ?MonthlyCycle
     {
         $cycles = $this->getCycles();
@@ -177,6 +197,14 @@ class ProjectBacklinks extends ResourcePage implements HasTable
     protected function defaultCycleIdForForms(): ?int
     {
         return $this->getSelectedCycle()?->getKey() ?? $this->defaultCycle()?->getKey();
+    }
+
+    /**
+     * Display form of a URL: scheme and "www." stripped.
+     */
+    protected function displayUrl(?string $url): ?string
+    {
+        return $url ? preg_replace('#^https?://(www\.)?#i', '', $url) : null;
     }
 
     public function table(Table $table): Table
@@ -193,11 +221,14 @@ class ProjectBacklinks extends ResourcePage implements HasTable
                     ->label('Published')
                     ->date('j M Y')
                     ->sortable()
-                    ->placeholder('—')
+                    ->placeholder(fn (Backlink $record): string => in_array($record->status, [BacklinkStatus::Planned, BacklinkStatus::Submitted], true) ? 'Not published' : '—')
                     ->description(fn (Backlink $record): ?string => $this->getSelectedCycle() ? null : $record->monthlyCycle?->periodLabel()),
                 TextColumn::make('published_url')
-                    ->label('Published URL')
+                    ->label('Link')
+                    ->state(fn (Backlink $record): ?string => $this->displayUrl($record->published_url))
                     ->limit(45)
+                    ->weight(FontWeight::SemiBold)
+                    ->description(fn (Backlink $record): ?string => $record->anchor_text ? 'Anchor: '.Str::limit($record->anchor_text, 40) : null)
                     ->tooltip(fn (Backlink $record): string => $record->published_url)
                     ->url(fn (Backlink $record): string => $record->published_url)
                     ->openUrlInNewTab()
@@ -207,34 +238,31 @@ class ProjectBacklinks extends ResourcePage implements HasTable
                             ->orWhere('anchor_text', 'like', "%{$search}%")
                             ->orWhere('target_url', 'like', "%{$search}%"),
                     )),
-                TextColumn::make('anchor_text')
-                    ->label('Anchor')
-                    ->limit(30)
-                    ->placeholder('—'),
                 TextColumn::make('target_url')
                     ->label('Target')
+                    ->state(fn (Backlink $record): ?string => $this->displayUrl($record->target_url))
                     ->limit(40)
+                    ->color('gray')
                     ->tooltip(fn (Backlink $record): ?string => $record->target_url)
                     ->placeholder('—'),
                 TextColumn::make('type')
                     ->badge()
                     ->sortable(),
-                TextColumn::make('domain_authority')
-                    ->label('DA')
-                    ->sortable()
-                    ->placeholder('—'),
-                TextColumn::make('domain_rating')
-                    ->label('DR')
-                    ->sortable()
-                    ->placeholder('—'),
-                TextColumn::make('spam_score')
-                    ->label('Spam')
-                    ->sortable()
-                    ->placeholder('—'),
+                TextColumn::make('metrics')
+                    ->label('Metrics')
+                    ->state(fn (Backlink $record): array => [
+                        'DA '.($record->domain_authority ?? '—'),
+                        'DR '.($record->domain_rating ?? '—'),
+                        'Spam '.($record->spam_score ?? '—'),
+                    ])
+                    ->listWithLineBreaks()
+                    ->size('xs')
+                    ->sortable(['domain_authority']),
                 TextColumn::make('status')
                     ->badge()
                     ->sortable(),
             ])
+            ->searchPlaceholder('Search link, anchor or target')
             ->filters([
                 SelectFilter::make('type')
                     ->options(BacklinkType::class),
@@ -263,6 +291,8 @@ class ProjectBacklinks extends ResourcePage implements HasTable
                 Action::make('edit')
                     ->label('Edit')
                     ->icon(Heroicon::OutlinedPencilSquare)
+                    ->link()
+                    ->size('sm')
                     ->modalHeading('Edit backlink')
                     ->schema(fn (): array => BacklinkForm::components($this->getProject()))
                     ->fillForm(fn (Backlink $record): array => BacklinkForm::fillFromBacklink($record))
@@ -272,63 +302,77 @@ class ProjectBacklinks extends ResourcePage implements HasTable
 
                         $this->runDomain($action, fn () => app(UpdateBacklinkAction::class)->handle($record, $data), 'Backlink updated');
                     }),
-                Action::make('setStatus')
-                    ->label('Status')
-                    ->icon(Heroicon::OutlinedArrowPath)
-                    ->color('gray')
-                    ->modalHeading('Change backlink status')
-                    ->modalWidth('sm')
-                    ->schema([
-                        Select::make('status')
-                            ->options(BacklinkStatus::class)
-                            ->required()
-                            ->native(false),
-                    ])
-                    ->fillForm(fn (Backlink $record): array => ['status' => $record->status->value])
-                    ->authorize(fn (Backlink $record): bool => Gate::allows('setStatus', $record))
-                    ->action(function (Backlink $record, array $data, Action $action): void {
-                        Gate::authorize('setStatus', $record);
+                ActionGroup::make([
+                    Action::make('setStatus')
+                        ->label('Change status')
+                        ->icon(Heroicon::OutlinedArrowPath)
+                        ->modalHeading('Change backlink status')
+                        ->modalWidth('sm')
+                        ->schema([
+                            Select::make('status')
+                                ->options(BacklinkStatus::class)
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->fillForm(fn (Backlink $record): array => ['status' => $record->status->value])
+                        ->authorize(fn (Backlink $record): bool => Gate::allows('setStatus', $record))
+                        ->action(function (Backlink $record, array $data, Action $action): void {
+                            Gate::authorize('setStatus', $record);
 
-                        $this->runDomain($action, fn () => app(SetBacklinkStatusAction::class)->handle($record, $data['status']), 'Status updated');
-                    }),
+                            $this->runDomain($action, fn () => app(SetBacklinkStatusAction::class)->handle($record, $data['status']), 'Status updated');
+                        }),
+                ]),
             ])
             ->toolbarActions([])
+            ->paginated([10, 25, 50])
             ->emptyStateIcon(Heroicon::OutlinedLink)
-            ->emptyStateHeading(fn (): string => $this->getSelectedCycle()
-                ? 'No backlinks recorded for '.$this->getSelectedCycle()->periodLabel()
-                : 'No backlinks yet')
-            ->emptyStateDescription('Record every link you build or earn. Only links marked Live count toward the monthly targets.');
+            ->emptyStateHeading('No backlinks recorded yet')
+            ->emptyStateDescription(fn (): string => $this->getSelectedCycle()
+                ? 'Add link-building work for this reporting month to track progress and include it in the monthly report.'
+                : 'Add link-building work to track progress and include it in the monthly report.')
+            ->emptyStateActions([
+                $this->addBacklinkAction(Action::make('createFirstBacklink')->label('Add backlink')),
+                $this->importCsvAction(Action::make('importCsvEmpty')),
+            ]);
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
-            Action::make('importCsv')
-                ->label('Import CSV')
-                ->icon(Heroicon::OutlinedArrowUpTray)
-                ->color('gray')
-                ->url(fn (): string => ImportBatchResource::getUrl('create', ['project' => $this->getRecord()->getKey(), 'type' => ImportType::Backlinks->value])),
-            Action::make('createBacklink')
-                ->label('Add backlink')
-                ->icon(Heroicon::OutlinedPlus)
-                ->modalHeading('Add backlink')
-                ->schema(fn (): array => BacklinkForm::components($this->getProject(), $this->defaultCycleIdForForms()))
-                ->authorize(fn (): bool => Gate::allows('manageBacklinks', $this->getProject()))
-                ->action(function (array $data, Action $action): void {
-                    Gate::authorize('manageBacklinks', $this->getProject());
-
-                    $this->runDomain(
-                        $action,
-                        fn () => app(CreateBacklinkAction::class)->handle($this->getProject(), $data, $this->currentUser()),
-                        'Backlink added',
-                    );
-                }),
+            $this->importCsvAction(Action::make('importCsv')),
+            $this->addBacklinkAction(Action::make('createBacklink')->label('Add backlink')),
         ];
+    }
+
+    /**
+     * The single "Add backlink" workflow (BacklinkForm + CreateBacklinkAction),
+     * used by the header and the empty state alike.
+     */
+    protected function addBacklinkAction(Action $action): Action
+    {
+        return $action
+            ->icon(Heroicon::OutlinedPlus)
+            ->modalHeading('Add backlink')
+            ->schema(fn (): array => BacklinkForm::components($this->getProject(), $this->defaultCycleIdForForms()))
+            ->authorize(fn (): bool => Gate::allows('manageBacklinks', $this->getProject()))
+            ->action(function (array $data, Action $action): void {
+                Gate::authorize('manageBacklinks', $this->getProject());
+
+                $this->runDomain(
+                    $action,
+                    fn () => app(CreateBacklinkAction::class)->handle($this->getProject(), $data, $this->currentUser()),
+                    'Backlink added',
+                );
+            });
+    }
+
+    protected function importCsvAction(Action $action): Action
+    {
+        return $action
+            ->label('Import CSV')
+            ->icon(Heroicon::OutlinedArrowUpTray)
+            ->color('gray')
+            ->url(fn (): string => ImportBatchResource::getUrl('create', ['project' => $this->getRecord()->getKey(), 'type' => ImportType::Backlinks->value]));
     }
 
     protected function runDomain(Action $action, callable $call, string $successTitle): void

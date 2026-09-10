@@ -1,5 +1,6 @@
 <x-filament-panels::page>
     @php
+        $project = $this->getProject();
         $cycles = $this->getCycles();
         $cycle = $this->getSelectedCycle();
         $gsc = $this->getGscSummary();
@@ -8,199 +9,354 @@
         $ga4 = $this->getGa4Summary();
         $countries = $this->getGa4Countries();
         $authority = $this->getAuthority();
-        $label = $cycle?->periodLabel() ?? 'this month';
-        $fmt = fn ($value, $suffix = '') => $value === null ? '—' : number_format((float) $value, is_int($value) ? 0 : 2).$suffix;
+        $canManage = $this->canManageSelectedCycle();
+        $period = $cycle?->periodLabel() ?? 'this month';
+
+        // Presentation formatting only: thousands separators, trimmed decimals, stored values untouched.
         $int = fn ($value) => $value === null ? '—' : number_format((int) $value);
+        $num = fn ($value, string $suffix = '') => $value === null ? '—' : rtrim(rtrim(number_format((float) $value, 2), '0'), '.').$suffix;
+
+        $label = 'class="fi-section-header-description" style="font-size: var(--text-xs); font-weight: var(--font-weight-medium); text-transform: uppercase; letter-spacing: 0.04em"';
+        $muted = 'class="fi-section-header-description" style="font-size: var(--text-sm)"';
+        $row = 'style="display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--spacing) * 3)"';
+        $grid = fn (array $cols, int $gap = 4, array $attrs = []) => (new \Filament\Support\View\ComponentAttributeBag)->grid($cols)->style(["gap: calc(var(--spacing) * {$gap})"])->merge($attrs, escape: false);
+
+        $th = 'class="fi-section-header-description" style="padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3); font-size: var(--text-xs); font-weight: var(--font-weight-medium); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap"';
+        $thNum = str_replace('white-space: nowrap"', 'white-space: nowrap; text-align: right"', $th);
+        $td = 'class="fi-in-text-item" style="padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3); font-size: var(--text-sm); border-top: 1px solid color-mix(in oklab, var(--gray-500) 20%, transparent)"';
+        $tdNum = str_replace('font-size: var(--text-sm);', 'font-size: var(--text-sm); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;', $td);
+        $tdStrong = str_replace('font-size: var(--text-sm);', 'font-size: var(--text-sm); font-weight: var(--font-weight-semibold); overflow-wrap: anywhere;', $td);
+        $tableWrap = 'style="overflow-x: auto; border: 1px solid color-mix(in oklab, var(--gray-500) 20%, transparent); border-radius: var(--radius-lg)"';
+        $table = 'style="width: 100%; border-collapse: collapse; text-align: left"';
+
+        $sections = [
+            ['id' => 'gsc', 'label' => 'Search Console', 'icon' => 'heroicon-o-magnifying-glass'],
+            ['id' => 'ga4', 'label' => 'Google Analytics', 'icon' => 'heroicon-o-chart-bar'],
+            ['id' => 'authority', 'label' => 'Authority', 'icon' => 'heroicon-o-shield-check'],
+        ];
+
+        $overview = [
+            ['key' => 'clicks', 'label' => 'Organic clicks', 'value' => $int($gsc?->clicks), 'helper' => 'Search Console'],
+            ['key' => 'impressions', 'label' => 'Organic impressions', 'value' => $int($gsc?->impressions), 'helper' => 'Search Console'],
+            ['key' => 'organic-sessions', 'label' => 'Organic sessions', 'value' => $int($ga4?->organic_sessions), 'helper' => 'Google Analytics'],
+            ['key' => 'active-users', 'label' => 'Active users', 'value' => $int($ga4?->active_users), 'helper' => 'Google Analytics'],
+        ];
     @endphp
 
+    @include('filament.resources.projects.partials.project-workspace-header', ['project' => $project, 'modules' => $this->getWorkspaceModules('analytics')])
+
+    {{-- Module title --}}
+    <div style="display: grid; gap: calc(var(--spacing) * 1)" data-analytics-header>
+        <h2 class="fi-section-header-heading" style="margin: 0; font-size: var(--text-xl); line-height: var(--text-xl--line-height)">Analytics</h2>
+        <p {!! $muted !!}>Track monthly search, website traffic and authority performance.</p>
+    </div>
+
+    {{-- Month controls, overview cards and section links --}}
     <x-filament::section>
-        <x-slot name="heading">Reporting month</x-slot>
+        <x-slot name="heading">{{ $cycle?->periodLabel() ?? 'Reporting month' }}</x-slot>
         <x-slot name="description">Analytics belong to the month they describe. Switching months shows that month's own figures.</x-slot>
-
-        <div class="flex flex-wrap items-center gap-6">
-            <div class="w-56">
-                <x-filament::input.wrapper>
-                    <x-filament::input.select wire:model.live="selectedCycle">
-                        @foreach ($cycles as $option)
-                            <option value="{{ $option->getKey() }}">{{ $option->periodLabel() }}</option>
-                        @endforeach
-                    </x-filament::input.select>
-                </x-filament::input.wrapper>
-            </div>
-
-            @if ($cycle)
-                <div class="text-sm text-gray-600 dark:text-gray-300" data-selected-cycle="{{ $cycle->getKey() }}">
-                    {{ $cycle->periodLabel() }}
-                    @if ($cycle->isLocked())
-                        <x-filament::badge color="gray" size="sm">Locked</x-filament::badge>
-                        <span class="text-xs text-gray-500">Read-only until a Super Admin unlocks the month.</span>
-                    @else
-                        <x-filament::badge color="success" size="sm">{{ $cycle->status->getLabel() }}</x-filament::badge>
+        <x-slot name="afterHeader">
+            @if ($cycles->isNotEmpty())
+                <div {!! $row !!} @if ($cycle) data-selected-cycle="{{ $cycle->getKey() }}" @endif>
+                    <label for="analytics-cycle" class="fi-section-header-description" style="font-size: var(--text-xs); font-weight: var(--font-weight-medium); text-transform: uppercase; letter-spacing: 0.04em">Reporting month</label>
+                    <div style="min-width: 12rem">
+                        <x-filament::input.wrapper>
+                            <x-filament::input.select id="analytics-cycle" wire:model.live="selectedCycle">
+                                @foreach ($cycles as $option)
+                                    <option value="{{ $option->getKey() }}">{{ $option->periodLabel() }}{{ $option->isLocked() ? ' (locked)' : '' }}</option>
+                                @endforeach
+                            </x-filament::input.select>
+                        </x-filament::input.wrapper>
+                    </div>
+                    @if ($cycle)
+                        <x-filament::badge :color="$cycle->status->getColor()" data-analytics-cycle-status="{{ $cycle->status->value }}">{{ $cycle->status->getLabel() }}</x-filament::badge>
                     @endif
                 </div>
-            @else
-                <p class="text-sm text-gray-500 dark:text-gray-400">This project has no monthly cycles yet.</p>
             @endif
-        </div>
+        </x-slot>
+
+        @if ($cycle)
+            <div {{ $grid(['default' => 2, 'xl' => 4], 4, ['data-analytics-overview' => '']) }}>
+                @foreach ($overview as $card)
+                    <div class="fi-wi-stats-overview-stat" style="padding: calc(var(--spacing) * 4)" data-analytics-overview-card="{{ $card['key'] }}">
+                        <div class="fi-wi-stats-overview-stat-content">
+                            <div class="fi-wi-stats-overview-stat-label-ctn"><span class="fi-wi-stats-overview-stat-label">{{ $card['label'] }}</span></div>
+                            <div class="fi-wi-stats-overview-stat-value" style="font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); font-variant-numeric: tabular-nums">{{ $card['value'] }}</div>
+                            <div class="fi-wi-stats-overview-stat-description"><span>{{ $card['helper'] }}</span></div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <nav aria-label="Analytics sections" style="display: flex; flex-wrap: wrap; gap: calc(var(--spacing) * 2); margin-top: calc(var(--spacing) * 5)" data-analytics-sections>
+                @foreach ($sections as $section)
+                    <x-filament::button tag="a" href="#{{ $section['id'] }}" color="gray" outlined :icon="$section['icon']" size="sm" data-analytics-section-link="{{ $section['id'] }}">{{ $section['label'] }}</x-filament::button>
+                @endforeach
+            </nav>
+
+            @if ($cycle->isLocked())
+                <p {!! $muted !!} style="margin-top: calc(var(--spacing) * 4); font-size: var(--text-sm)" data-analytics-locked>This reporting month is locked. Analytics data is read-only.</p>
+            @endif
+        @else
+            <p {!! $muted !!} data-analytics-no-cycles>This project has no monthly cycles yet. Analytics can be recorded once it has a reporting month.</p>
+        @endif
     </x-filament::section>
 
     @if ($cycle)
         {{-- 1. Google Search Console --}}
-        <x-filament::section>
-            <x-slot name="heading">Google Search Console</x-slot>
-            <x-slot name="description">Organic search performance for {{ $label }}. Source: <x-filament::badge color="{{ $gsc?->source->getColor() ?? 'gray' }}" size="sm">{{ $gsc?->source->getLabel() ?? 'Manual Entry' }}</x-filament::badge></x-slot>
-            <x-slot name="afterHeader">{{ $this->editGscSummaryAction }}</x-slot>
-
-            @if ($gsc)
-                <dl class="grid grid-cols-2 gap-4 md:grid-cols-4" data-gsc-summary="{{ $gsc->getKey() }}">
-                    <div><dt class="text-xs text-gray-500">Clicks</dt><dd class="text-2xl font-semibold" data-gsc-clicks="{{ $gsc->clicks }}">{{ $int($gsc->clicks) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Impressions</dt><dd class="text-2xl font-semibold" data-gsc-impressions="{{ $gsc->impressions }}">{{ $int($gsc->impressions) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">CTR</dt><dd class="text-2xl font-semibold" data-gsc-ctr="{{ $gsc->ctr ?? '' }}">{{ $fmt($gsc->ctr, '%') }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Average position</dt><dd class="text-2xl font-semibold" data-gsc-position="{{ $gsc->average_position ?? '' }}">{{ $fmt($gsc->average_position) }}</dd></div>
-                </dl>
-                <p class="mt-2 text-xs text-gray-500">Entered by {{ $gsc->enteredBy?->name ?? 'unknown' }} · {{ $gsc->updated_at?->format('j M Y H:i') }}</p>
-            @else
-                <p class="text-sm text-gray-500 dark:text-gray-400" data-gsc-empty>No GSC data for {{ $label }}.</p>
-            @endif
-
-            <div class="mt-6 grid gap-6 lg:grid-cols-2">
-                <div>
-                    <div class="mb-2 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold">Top queries</h3>
-                        {{ $this->editGscQueriesAction }}
+        <div id="gsc" style="display: grid; gap: calc(var(--spacing) * 6)">
+            <x-filament::section>
+                <x-slot name="heading">Google Search Console</x-slot>
+                <x-slot name="description">Organic search performance for {{ $period }}.</x-slot>
+                <x-slot name="afterHeader">
+                    <div {!! $row !!}>
+                        <x-filament::badge :color="$gsc?->source->getColor() ?? 'gray'" data-gsc-source="{{ $gsc?->source->value ?? 'manual' }}">{{ $gsc?->source->getLabel() ?? 'Manual Entry' }}</x-filament::badge>
+                        {{ $this->editGscSummaryAction }}
                     </div>
-                    @if ($queries->isEmpty())
-                        <p class="text-sm text-gray-500 dark:text-gray-400">No queries recorded for {{ $label }}.</p>
-                    @else
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="text-left text-xs text-gray-500"><tr><th class="py-1">Query</th><th class="py-1 text-right">Clicks</th><th class="py-1 text-right">Impr.</th><th class="py-1 text-right">CTR</th><th class="py-1 text-right">Pos.</th></tr></thead>
-                                <tbody>
-                                    @foreach ($queries as $row)
-                                        <tr class="border-t border-gray-100 dark:border-gray-800" data-gsc-query="{{ $row->query }}">
-                                            <td class="py-1">{{ $row->query }}</td>
-                                            <td class="py-1 text-right">{{ $int($row->clicks) }}</td>
-                                            <td class="py-1 text-right">{{ $int($row->impressions) }}</td>
-                                            <td class="py-1 text-right">{{ $fmt($row->ctr, '%') }}</td>
-                                            <td class="py-1 text-right">{{ $fmt($row->average_position) }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endif
-                </div>
+                </x-slot>
 
-                <div>
-                    <div class="mb-2 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold">Landing pages</h3>
-                        {{ $this->editGscPagesAction }}
+                @if ($gsc)
+                    @php
+                        $gscCards = [
+                            ['label' => 'Clicks', 'value' => $int($gsc->clicks), 'attr' => 'data-gsc-clicks="'.e($gsc->clicks).'"'],
+                            ['label' => 'Impressions', 'value' => $int($gsc->impressions), 'attr' => 'data-gsc-impressions="'.e($gsc->impressions).'"'],
+                            ['label' => 'CTR', 'value' => $num($gsc->ctr, '%'), 'attr' => 'data-gsc-ctr="'.e($gsc->ctr ?? '').'"'],
+                            ['label' => 'Average position', 'value' => $num($gsc->average_position), 'attr' => 'data-gsc-position="'.e($gsc->average_position ?? '').'"'],
+                        ];
+                    @endphp
+                    <div {{ $grid(['default' => 2, 'lg' => 4], 4, ['data-gsc-summary' => $gsc->getKey()]) }}>
+                        @foreach ($gscCards as $card)
+                            <div class="fi-wi-stats-overview-stat" style="padding: calc(var(--spacing) * 4)">
+                                <div class="fi-wi-stats-overview-stat-content">
+                                    <div class="fi-wi-stats-overview-stat-label-ctn"><span class="fi-wi-stats-overview-stat-label">{{ $card['label'] }}</span></div>
+                                    <div class="fi-wi-stats-overview-stat-value" style="font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); font-variant-numeric: tabular-nums" {!! $card['attr'] !!}>{{ $card['value'] }}</div>
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
-                    @if ($pages->isEmpty())
-                        <p class="text-sm text-gray-500 dark:text-gray-400">No landing pages recorded for {{ $label }}.</p>
-                    @else
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="text-left text-xs text-gray-500"><tr><th class="py-1">Page</th><th class="py-1 text-right">Clicks</th><th class="py-1 text-right">Impr.</th><th class="py-1 text-right">CTR</th><th class="py-1 text-right">Pos.</th></tr></thead>
-                                <tbody>
-                                    @foreach ($pages as $row)
-                                        <tr class="border-t border-gray-100 dark:border-gray-800" data-gsc-page="{{ $row->page_url }}" data-gsc-page-mapping="{{ $row->page_id ?? '' }}">
-                                            <td class="py-1">
-                                                <a href="{{ $row->page_url }}" target="_blank" rel="noopener" class="underline">{{ \Illuminate\Support\Str::limit($row->page_url, 60) }}</a>
-                                                @if ($row->page)
-                                                    <span class="ml-1 text-xs text-gray-500">→ {{ $row->page->displayName() }}</span>
-                                                @endif
-                                            </td>
-                                            <td class="py-1 text-right">{{ $int($row->clicks) }}</td>
-                                            <td class="py-1 text-right">{{ $int($row->impressions) }}</td>
-                                            <td class="py-1 text-right">{{ $fmt($row->ctr, '%') }}</td>
-                                            <td class="py-1 text-right">{{ $fmt($row->average_position) }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endif
-                </div>
-            </div>
-        </x-filament::section>
-
-        {{-- 2. Google Analytics --}}
-        <x-filament::section>
-            <x-slot name="heading">Google Analytics</x-slot>
-            <x-slot name="description">Website traffic for {{ $label }}. Source: <x-filament::badge color="{{ $ga4?->source->getColor() ?? 'gray' }}" size="sm">{{ $ga4?->source->getLabel() ?? 'Manual Entry' }}</x-filament::badge></x-slot>
-            <x-slot name="afterHeader">{{ $this->editGa4SummaryAction }}</x-slot>
-
-            @if ($ga4)
-                <dl class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5" data-ga4-summary="{{ $ga4->getKey() }}">
-                    <div><dt class="text-xs text-gray-500">Active users</dt><dd class="text-xl font-semibold" data-ga4-active-users="{{ $ga4->active_users ?? '' }}">{{ $int($ga4->active_users) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">New users</dt><dd class="text-xl font-semibold">{{ $int($ga4->new_users) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Sessions</dt><dd class="text-xl font-semibold" data-ga4-sessions="{{ $ga4->sessions ?? '' }}">{{ $int($ga4->sessions) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Organic sessions</dt><dd class="text-xl font-semibold">{{ $int($ga4->organic_sessions) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Engaged sessions</dt><dd class="text-xl font-semibold">{{ $int($ga4->engaged_sessions) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Engagement rate</dt><dd class="text-xl font-semibold" data-ga4-engagement-rate="{{ $ga4->engagement_rate ?? '' }}">{{ $fmt($ga4->engagement_rate, '%') }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Avg. engagement time</dt><dd class="text-xl font-semibold">{{ $ga4->average_engagement_time_seconds === null ? '—' : gmdate('i:s', $ga4->average_engagement_time_seconds) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Event count</dt><dd class="text-xl font-semibold">{{ $int($ga4->event_count) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Key events</dt><dd class="text-xl font-semibold">{{ $int($ga4->key_events) }}</dd></div>
-                </dl>
-                <p class="mt-2 text-xs text-gray-500">Entered by {{ $ga4->enteredBy?->name ?? 'unknown' }} · {{ $ga4->updated_at?->format('j M Y H:i') }}</p>
-            @else
-                <p class="text-sm text-gray-500 dark:text-gray-400" data-ga4-empty>No GA4 data for {{ $label }}.</p>
-            @endif
-
-            <div class="mt-6">
-                <div class="mb-2 flex items-center justify-between">
-                    <h3 class="text-sm font-semibold">Audience by country</h3>
-                    {{ $this->editGa4CountriesAction }}
-                </div>
-                @if ($countries->isEmpty())
-                    <p class="text-sm text-gray-500 dark:text-gray-400">No country data recorded for {{ $label }}.</p>
+                    <p class="fi-section-header-description" style="margin-top: calc(var(--spacing) * 3); font-size: var(--text-xs)">Lower average position is better. Entered by {{ $gsc->enteredBy?->name ?? 'unknown' }} · {{ $gsc->updated_at?->format('j M Y H:i') }}</p>
                 @else
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="text-left text-xs text-gray-500"><tr><th class="py-1">Country</th><th class="py-1 text-right">Active</th><th class="py-1 text-right">New</th><th class="py-1 text-right">Sessions</th><th class="py-1 text-right">Engaged</th><th class="py-1 text-right">Eng. rate</th><th class="py-1 text-right">Events</th><th class="py-1 text-right">Key events</th></tr></thead>
+                    <div style="display: grid; gap: calc(var(--spacing) * 2); padding: calc(var(--spacing) * 2) 0" data-gsc-empty>
+                        <div class="fi-in-text-item" style="font-size: var(--text-sm); font-weight: var(--font-weight-medium)">No Search Console data yet</div>
+                        <p {!! $muted !!}>Add this month's GSC figures to include organic search performance in the monthly report for {{ $period }}.</p>
+                        @if ($canManage)
+                            <div><x-filament::button size="sm" icon="heroicon-o-plus" wire:click="mountAction('editGscSummary')" data-gsc-add>Add GSC data</x-filament::button></div>
+                        @endif
+                    </div>
+                @endif
+            </x-filament::section>
+
+            {{-- Top search queries --}}
+            <x-filament::section>
+                <x-slot name="heading">Top search queries</x-slot>
+                <x-slot name="description">Queries generating organic search visibility during this reporting month. Lower average position is better.</x-slot>
+                <x-slot name="afterHeader">{{ $this->editGscQueriesAction }}</x-slot>
+
+                @if ($queries->isEmpty())
+                    <p {!! $muted !!} data-gsc-queries-empty>No queries recorded for {{ $period }} yet.</p>
+                @else
+                    <div {!! $tableWrap !!}>
+                        <table {!! $table !!} data-gsc-queries>
+                            <thead><tr><th {!! $th !!}>Query</th><th {!! $thNum !!}>Clicks</th><th {!! $thNum !!}>Impressions</th><th {!! $thNum !!}>CTR</th><th {!! $thNum !!}>Position</th></tr></thead>
                             <tbody>
-                                @foreach ($countries as $row)
-                                    <tr class="border-t border-gray-100 dark:border-gray-800" data-ga4-country="{{ $row->country }}">
-                                        <td class="py-1">{{ $row->country }}</td>
-                                        <td class="py-1 text-right">{{ $int($row->active_users) }}</td>
-                                        <td class="py-1 text-right">{{ $int($row->new_users) }}</td>
-                                        <td class="py-1 text-right">{{ $int($row->sessions) }}</td>
-                                        <td class="py-1 text-right">{{ $int($row->engaged_sessions) }}</td>
-                                        <td class="py-1 text-right">{{ $fmt($row->engagement_rate, '%') }}</td>
-                                        <td class="py-1 text-right">{{ $int($row->event_count) }}</td>
-                                        <td class="py-1 text-right">{{ $int($row->key_events) }}</td>
+                                @foreach ($queries as $query)
+                                    <tr data-gsc-query="{{ $query->query }}">
+                                        <td {!! $tdStrong !!}>{{ $query->query }}</td>
+                                        <td {!! $tdNum !!} style="font-weight: var(--font-weight-semibold)">{{ $int($query->clicks) }}</td>
+                                        <td {!! $tdNum !!}>{{ $int($query->impressions) }}</td>
+                                        <td {!! $tdNum !!}>{{ $num($query->ctr, '%') }}</td>
+                                        <td {!! $tdNum !!}>{{ $num($query->average_position) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
                         </table>
                     </div>
                 @endif
-            </div>
-        </x-filament::section>
+            </x-filament::section>
 
-        {{-- 3. Authority --}}
-        <x-filament::section>
-            <x-slot name="heading">Authority</x-slot>
-            <x-slot name="description">Site-wide authority figures from external tools for {{ $label }}. Source: <x-filament::badge color="{{ $authority?->source->getColor() ?? 'gray' }}" size="sm">{{ $authority?->source->getLabel() ?? 'Manual Entry' }}</x-filament::badge></x-slot>
-            <x-slot name="afterHeader">{{ $this->editAuthorityAction }}</x-slot>
+            {{-- Top landing pages --}}
+            <x-filament::section>
+                <x-slot name="heading">Top landing pages</x-slot>
+                <x-slot name="description">Pages receiving organic search traffic during this reporting month.</x-slot>
+                <x-slot name="afterHeader">{{ $this->editGscPagesAction }}</x-slot>
 
-            @if ($authority)
-                <dl class="grid grid-cols-2 gap-4 md:grid-cols-3" data-authority="{{ $authority->getKey() }}">
-                    <div><dt class="text-xs text-gray-500">Moz Domain Authority</dt><dd class="text-xl font-semibold" data-authority-da="{{ $authority->moz_domain_authority ?? '' }}">{{ $int($authority->moz_domain_authority) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Moz linking root domains</dt><dd class="text-xl font-semibold">{{ $int($authority->moz_linking_root_domains) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Ahrefs Domain Rating</dt><dd class="text-xl font-semibold" data-authority-dr="{{ $authority->ahrefs_domain_rating ?? '' }}">{{ $authority->ahrefs_domain_rating === null ? '—' : number_format((float) $authority->ahrefs_domain_rating, 1) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Ahrefs URL Rating</dt><dd class="text-xl font-semibold">{{ $authority->ahrefs_url_rating === null ? '—' : number_format((float) $authority->ahrefs_url_rating, 1) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Backlinks (tool total)</dt><dd class="text-xl font-semibold" data-authority-backlinks="{{ $authority->backlinks_count ?? '' }}">{{ $int($authority->backlinks_count) }}</dd></div>
-                    <div><dt class="text-xs text-gray-500">Referring domains</dt><dd class="text-xl font-semibold">{{ $int($authority->referring_domains_count) }}</dd></div>
-                </dl>
-                @if ($authority->notes)
-                    <p class="mt-3 whitespace-pre-line text-sm text-gray-600 dark:text-gray-300">{{ $authority->notes }}</p>
+                @if ($pages->isEmpty())
+                    <p {!! $muted !!} data-gsc-pages-empty>No landing pages recorded for {{ $period }} yet.</p>
+                @else
+                    <div {!! $tableWrap !!}>
+                        <table {!! $table !!} data-gsc-pages>
+                            <thead><tr><th {!! $th !!}>Page</th><th {!! $thNum !!}>Clicks</th><th {!! $thNum !!}>Impressions</th><th {!! $thNum !!}>CTR</th><th {!! $thNum !!}>Position</th></tr></thead>
+                            <tbody>
+                                @foreach ($pages as $landing)
+                                    <tr data-gsc-page="{{ $landing->page_url }}" data-gsc-page-mapping="{{ $landing->page_id ?? '' }}">
+                                        <td {!! $td !!} style="max-width: 24rem">
+                                            <div style="display: grid; gap: calc(var(--spacing) * 0.5); min-width: 0">
+                                                @if ($landing->page)
+                                                    <span style="font-weight: var(--font-weight-semibold); overflow-wrap: anywhere">{{ $landing->page->displayName() }}</span>
+                                                    <x-filament::link :href="$landing->page_url" target="_blank" rel="noopener noreferrer" size="sm" color="gray" :tooltip="$landing->page_url" style="overflow-wrap: anywhere">{{ $this->landingPagePath($landing) }}</x-filament::link>
+                                                @else
+                                                    <x-filament::link :href="$landing->page_url" target="_blank" rel="noopener noreferrer" size="sm" :tooltip="$landing->page_url" style="font-weight: var(--font-weight-semibold); overflow-wrap: anywhere">{{ $this->landingPagePath($landing) }}</x-filament::link>
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td {!! $tdNum !!} style="font-weight: var(--font-weight-semibold)">{{ $int($landing->clicks) }}</td>
+                                        <td {!! $tdNum !!}>{{ $int($landing->impressions) }}</td>
+                                        <td {!! $tdNum !!}>{{ $num($landing->ctr, '%') }}</td>
+                                        <td {!! $tdNum !!}>{{ $num($landing->average_position) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 @endif
-                <p class="mt-2 text-xs text-gray-500">Entered by {{ $authority->enteredBy?->name ?? 'unknown' }} · {{ $authority->updated_at?->format('j M Y H:i') }}. Tool totals only; the monthly Backlinks target is tracked under Project → Backlinks.</p>
-            @else
-                <p class="text-sm text-gray-500 dark:text-gray-400" data-authority-empty>No authority data for {{ $label }}.</p>
-            @endif
-        </x-filament::section>
+            </x-filament::section>
+        </div>
+
+        {{-- 2. Google Analytics --}}
+        <div id="ga4" style="display: grid; gap: calc(var(--spacing) * 6)">
+            <x-filament::section>
+                <x-slot name="heading">Google Analytics</x-slot>
+                <x-slot name="description">Website traffic for {{ $period }}.</x-slot>
+                <x-slot name="afterHeader">
+                    <div {!! $row !!}>
+                        <x-filament::badge :color="$ga4?->source->getColor() ?? 'gray'" data-ga4-source="{{ $ga4?->source->value ?? 'manual' }}">{{ $ga4?->source->getLabel() ?? 'Manual Entry' }}</x-filament::badge>
+                        {{ $this->editGa4SummaryAction }}
+                    </div>
+                </x-slot>
+
+                @if ($ga4)
+                    @php
+                        $ga4Cards = [
+                            ['label' => 'Active users', 'value' => $int($ga4->active_users), 'attr' => 'data-ga4-active-users="'.e($ga4->active_users ?? '').'"'],
+                            ['label' => 'Sessions', 'value' => $int($ga4->sessions), 'attr' => 'data-ga4-sessions="'.e($ga4->sessions ?? '').'"'],
+                            ['label' => 'Organic sessions', 'value' => $int($ga4->organic_sessions), 'attr' => 'data-ga4-organic-sessions="'.e($ga4->organic_sessions ?? '').'"'],
+                            ['label' => 'Engagement rate', 'value' => $num($ga4->engagement_rate, '%'), 'attr' => 'data-ga4-engagement-rate="'.e($ga4->engagement_rate ?? '').'"'],
+                        ];
+                        $ga4Secondary = [
+                            ['label' => 'New users', 'value' => $int($ga4->new_users), 'key' => 'new-users'],
+                            ['label' => 'Engaged sessions', 'value' => $int($ga4->engaged_sessions), 'key' => 'engaged-sessions'],
+                            ['label' => 'Avg engagement time', 'value' => $this->formatDuration($ga4->average_engagement_time_seconds), 'key' => 'engagement-time'],
+                            ['label' => 'Event count', 'value' => $int($ga4->event_count), 'key' => 'event-count'],
+                            ['label' => 'Key events', 'value' => $int($ga4->key_events), 'key' => 'key-events'],
+                        ];
+                    @endphp
+                    <div {{ $grid(['default' => 2, 'lg' => 4], 4, ['data-ga4-summary' => $ga4->getKey()]) }}>
+                        @foreach ($ga4Cards as $card)
+                            <div class="fi-wi-stats-overview-stat" style="padding: calc(var(--spacing) * 4)">
+                                <div class="fi-wi-stats-overview-stat-content">
+                                    <div class="fi-wi-stats-overview-stat-label-ctn"><span class="fi-wi-stats-overview-stat-label">{{ $card['label'] }}</span></div>
+                                    <div class="fi-wi-stats-overview-stat-value" style="font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); font-variant-numeric: tabular-nums" {!! $card['attr'] !!}>{{ $card['value'] }}</div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <dl {{ $grid(['default' => 1, 'sm' => 2, 'lg' => 5], 3, ['data-ga4-secondary' => '', 'style' => 'margin-top: calc(var(--spacing) * 4); gap: calc(var(--spacing) * 3)']) }}>
+                        @foreach ($ga4Secondary as $metric)
+                            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: calc(var(--spacing) * 3); padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3); border: 1px solid color-mix(in oklab, var(--gray-500) 20%, transparent); border-radius: var(--radius-lg)">
+                                <dt class="fi-section-header-description" style="font-size: var(--text-xs)">{{ $metric['label'] }}</dt>
+                                <dd class="fi-in-text-item" style="margin: 0; font-size: var(--text-sm); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; white-space: nowrap" data-ga4-metric="{{ $metric['key'] }}">{{ $metric['value'] }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                    <p class="fi-section-header-description" style="margin-top: calc(var(--spacing) * 3); font-size: var(--text-xs)">Entered by {{ $ga4->enteredBy?->name ?? 'unknown' }} · {{ $ga4->updated_at?->format('j M Y H:i') }}</p>
+                @else
+                    <div style="display: grid; gap: calc(var(--spacing) * 2); padding: calc(var(--spacing) * 2) 0" data-ga4-empty>
+                        <div class="fi-in-text-item" style="font-size: var(--text-sm); font-weight: var(--font-weight-medium)">No Google Analytics data yet</div>
+                        <p {!! $muted !!}>Add this month's GA4 figures to include website traffic in the monthly report for {{ $period }}.</p>
+                        @if ($canManage)
+                            <div><x-filament::button size="sm" icon="heroicon-o-plus" wire:click="mountAction('editGa4Summary')" data-ga4-add>Add GA4 data</x-filament::button></div>
+                        @endif
+                    </div>
+                @endif
+            </x-filament::section>
+
+            {{-- Audience by country --}}
+            <x-filament::section>
+                <x-slot name="heading">Audience by country</x-slot>
+                <x-slot name="description">Where this month's visitors came from.</x-slot>
+                <x-slot name="afterHeader">{{ $this->editGa4CountriesAction }}</x-slot>
+
+                @if ($countries->isEmpty())
+                    <p {!! $muted !!} data-ga4-countries-empty>No country data recorded for {{ $period }} yet.</p>
+                @else
+                    <div {!! $tableWrap !!}>
+                        <table {!! $table !!} data-ga4-countries>
+                            <thead><tr><th {!! $th !!}>Country</th><th {!! $thNum !!}>Active users</th><th {!! $thNum !!}>New users</th><th {!! $thNum !!}>Sessions</th><th {!! $thNum !!}>Engagement rate</th></tr></thead>
+                            <tbody>
+                                @foreach ($countries as $country)
+                                    <tr data-ga4-country="{{ $country->country }}">
+                                        <td {!! $tdStrong !!}>{{ $country->country }}</td>
+                                        <td {!! $tdNum !!} style="font-weight: var(--font-weight-semibold)">{{ $int($country->active_users) }}</td>
+                                        <td {!! $tdNum !!}>{{ $int($country->new_users) }}</td>
+                                        <td {!! $tdNum !!}>{{ $int($country->sessions) }}</td>
+                                        <td {!! $tdNum !!}>{{ $num($country->engagement_rate, '%') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </x-filament::section>
+        </div>
+
+        {{-- 3. Site authority --}}
+        <div id="authority">
+            <x-filament::section>
+                <x-slot name="heading">Site authority</x-slot>
+                <x-slot name="description">These are site-wide authority metrics. Monthly link-building work is tracked separately under Backlinks.</x-slot>
+                <x-slot name="afterHeader">
+                    <div {!! $row !!}>
+                        <x-filament::badge :color="$authority?->source->getColor() ?? 'gray'" data-authority-source="{{ $authority?->source->value ?? 'manual' }}">{{ $authority?->source->getLabel() ?? 'Manual Entry' }}</x-filament::badge>
+                        {{ $this->editAuthorityAction }}
+                    </div>
+                </x-slot>
+
+                @if ($authority)
+                    @php
+                        $groups = [
+                            ['key' => 'moz', 'label' => 'Moz', 'metrics' => [
+                                ['label' => 'Domain Authority', 'value' => $int($authority->moz_domain_authority), 'attr' => 'data-authority-da="'.e($authority->moz_domain_authority ?? '').'"'],
+                                ['label' => 'Linking root domains', 'value' => $int($authority->moz_linking_root_domains), 'attr' => ''],
+                            ]],
+                            ['key' => 'ahrefs', 'label' => 'Ahrefs', 'metrics' => [
+                                ['label' => 'Domain Rating', 'value' => $num($authority->ahrefs_domain_rating), 'attr' => 'data-authority-dr="'.e($authority->ahrefs_domain_rating ?? '').'"'],
+                                ['label' => 'URL Rating', 'value' => $num($authority->ahrefs_url_rating), 'attr' => ''],
+                            ]],
+                            ['key' => 'link-profile', 'label' => 'Link profile', 'metrics' => [
+                                ['label' => 'Known backlinks', 'value' => $int($authority->backlinks_count), 'attr' => 'data-authority-backlinks="'.e($authority->backlinks_count ?? '').'"'],
+                                ['label' => 'Referring domains', 'value' => $int($authority->referring_domains_count), 'attr' => ''],
+                            ]],
+                        ];
+                    @endphp
+                    <div {{ $grid(['default' => 1, 'md' => 3], 4, ['data-authority' => $authority->getKey()]) }}>
+                        @foreach ($groups as $group)
+                            <div class="fi-wi-stats-overview-stat" style="padding: calc(var(--spacing) * 4); display: grid; gap: calc(var(--spacing) * 3)" data-authority-group="{{ $group['key'] }}">
+                                <div {!! $label !!}>{{ $group['label'] }}</div>
+                                <dl style="display: grid; gap: calc(var(--spacing) * 2); margin: 0">
+                                    @foreach ($group['metrics'] as $metric)
+                                        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: calc(var(--spacing) * 3)">
+                                            <dt class="fi-section-header-description" style="font-size: var(--text-sm)">{{ $metric['label'] }}</dt>
+                                            <dd class="fi-in-text-item" style="margin: 0; font-size: var(--text-xl); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums" {!! $metric['attr'] !!}>{{ $metric['value'] }}</dd>
+                                        </div>
+                                    @endforeach
+                                </dl>
+                            </div>
+                        @endforeach
+                    </div>
+                    @if ($authority->notes)
+                        <p class="fi-in-text-item" style="margin-top: calc(var(--spacing) * 3); font-size: var(--text-sm); white-space: pre-line" data-authority-notes>{{ $authority->notes }}</p>
+                    @endif
+                    <p class="fi-section-header-description" style="margin-top: calc(var(--spacing) * 3); font-size: var(--text-xs)">Entered by {{ $authority->enteredBy?->name ?? 'unknown' }} · {{ $authority->updated_at?->format('j M Y H:i') }}</p>
+                @else
+                    <div style="display: grid; gap: calc(var(--spacing) * 2); padding: calc(var(--spacing) * 2) 0" data-authority-empty>
+                        <div class="fi-in-text-item" style="font-size: var(--text-sm); font-weight: var(--font-weight-medium)">No authority metrics yet</div>
+                        <p {!! $muted !!}>Add this month's Moz, Ahrefs and link profile figures for {{ $period }}.</p>
+                        @if ($canManage)
+                            <div><x-filament::button size="sm" icon="heroicon-o-plus" wire:click="mountAction('editAuthority')" data-authority-add>Add authority data</x-filament::button></div>
+                        @endif
+                    </div>
+                @endif
+            </x-filament::section>
+        </div>
     @endif
 </x-filament-panels::page>

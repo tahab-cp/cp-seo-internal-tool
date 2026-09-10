@@ -12,6 +12,7 @@ use App\Actions\Reports\UpdateReportSectionTextAction;
 use App\Exceptions\LockedMonthlyCycleException;
 use App\Exceptions\PdfGenerationException;
 use App\Exceptions\ReportNotReadyException;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\MonthlyCycleAuditEvent;
 use App\Models\MonthlyReport;
@@ -50,13 +51,12 @@ use InvalidArgumentException;
  */
 class ProjectReportEditor extends ResourcePage
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
 
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-report-editor';
-
-    protected static ?string $title = 'Report';
 
     public int $reportId;
 
@@ -77,16 +77,31 @@ class ProjectReportEditor extends ResourcePage
 
     public function getTitle(): string
     {
-        $report = $this->getReport();
-
-        return 'Report — '.$report->monthlyCycle->periodLabel().' ('.$report->versionLabel().')';
+        return $this->getProject()->name;
     }
 
     public function getSubheading(): ?string
     {
-        $project = $this->getProject();
+        return $this->getWorkspaceSubheading();
+    }
 
-        return $project->name.($project->client ? ' · '.$project->client->name : '');
+    /**
+     * Display form of a landing page URL: "/path" on the project's own site,
+     * "host/path" elsewhere. Presentation only.
+     */
+    public function pagePath(?string $url): string
+    {
+        if (blank($url)) {
+            return '—';
+        }
+
+        $path = parse_url($url, PHP_URL_PATH) ?: '/';
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $projectHost = strtolower((string) parse_url((string) $this->getProject()->website_url, PHP_URL_HOST));
+
+        $display = $host !== '' && preg_replace('/^www\./', '', $host) !== preg_replace('/^www\./', '', $projectHost) ? $host.$path : $path;
+
+        return mb_strlen($display) > 60 ? mb_substr($display, 0, 57).'…' : $display;
     }
 
     public function getProject(): Project
@@ -192,22 +207,24 @@ class ProjectReportEditor extends ResourcePage
     public function unlockAction(): Action
     {
         return Action::make('unlock')
-            ->label('Unlock for Correction')
+            ->label('Unlock for correction')
             ->icon(Heroicon::OutlinedLockOpen)
             ->color('danger')
-            ->modalHeading('Unlock this reporting month for correction')
-            ->modalDescription('Unlocking allows this reporting month to be corrected. The current final report will be permanently preserved as a historical version. The corrected report must be reviewed and finalized again.')
-            ->modalSubmitActionLabel('Unlock for Correction')
+            ->outlined()
+            ->size('sm')
+            ->modalHeading(fn (): string => 'Unlock '.$this->getReport()->monthlyCycle->periodLabel().' report?')
+            ->modalDescription(fn (): string => 'Version '.$this->getReport()->version.' will remain permanently available. The reporting month will become editable again and a new report version will be prepared, reviewed and finalised.')
+            ->modalSubmitActionLabel('Unlock for correction')
             ->modalWidth('2xl')
             ->schema([
                 Textarea::make('reason')
-                    ->label('Correction reason')
+                    ->label('Reason')
                     ->required()
                     ->minLength(UnlockMonthlyReportAction::REASON_MIN)
                     ->maxLength(UnlockMonthlyReportAction::REASON_MAX)
                     ->rows(4)
                     ->placeholder('e.g. GA4 organic sessions were entered incorrectly.')
-                    ->helperText('Recorded permanently with the archived version and in the audit trail.'),
+                    ->helperText('Kept with the archived version and shown in the report history.'),
             ])
             ->authorize(fn (): bool => Gate::allows('unlock', $this->getReport()))
             ->action(function (array $data, Action $action): void {
@@ -219,53 +236,25 @@ class ProjectReportEditor extends ResourcePage
             });
     }
 
+    /**
+     * Action hierarchy per state. Draft: Mark ready is primary; Ready:
+     * Finalise is primary (managers / admins only, by policy); Final:
+     * Download PDF is primary. Preview stays secondary throughout.
+     */
     protected function getHeaderActions(): array
     {
         return [
             Action::make('backToReports')
                 ->label('All reports')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
+                ->icon(Heroicon::OutlinedArrowLeft)
                 ->color('gray')
+                ->link()
                 ->url(fn (): string => ProjectResource::getUrl('reports', ['record' => $this->getRecord()])),
-            Action::make('preview')
-                ->label(fn (): string => $this->getReport()->isFinal() ? 'View final report' : 'Preview report')
-                ->icon(Heroicon::OutlinedEye)
-                ->color('gray')
-                ->url(fn (): string => $this->previewUrl(), shouldOpenInNewTab: true),
-            Action::make('downloadPdf')
-                ->label('Download PDF')
-                ->icon(Heroicon::OutlinedArrowDownTray)
-                ->color('success')
-                ->authorize(fn (): bool => Gate::allows('downloadPdf', $this->getReport()))
-                ->url(fn (): string => $this->pdfUrl(), shouldOpenInNewTab: true),
-            Action::make('markReady')
-                ->label('Mark Ready for Review')
-                ->icon(Heroicon::OutlinedCheckCircle)
-                ->color('primary')
-                ->requiresConfirmation()
-                ->modalHeading('Mark this report Ready for Review')
-                ->modalDescription('Readiness is re-checked now. Source data can still be corrected until a manager finalizes the report.')
-                ->visible(fn (): bool => ! $this->getReport()->isReadyForReview())
-                ->authorize(fn (): bool => Gate::allows('markReady', $this->getReport()))
-                ->action(function (Action $action): void {
-                    $this->runDomain($action, fn () => app(MarkReportReadyAction::class)->handle($this->getReport(), $this->currentUser()), 'Report marked Ready for Review');
-                }),
-            Action::make('finalize')
-                ->label('Finalize Report')
-                ->icon(Heroicon::OutlinedLockClosed)
-                ->color('danger')
-                ->requiresConfirmation()
-                ->modalHeading('Finalize this report')
-                ->modalDescription("Finalizing will:\n• re-check readiness and generate the final PDF\n• preserve the report snapshot\n• lock this reporting period\n• prevent normal editing of monthly data")
-                ->modalSubmitActionLabel('Finalize Report')
-                ->authorize(fn (): bool => Gate::allows('finalize', $this->getReport()))
-                ->action(function (Action $action): void {
-                    $this->runDomain($action, fn () => app(FinalizeMonthlyReportAction::class)->handle($this->getReport(), $this->currentUser()), 'Report finalized and reporting period locked');
-                }),
             Action::make('checkReadiness')
                 ->label('Re-check readiness')
                 ->icon(Heroicon::OutlinedArrowPath)
                 ->color('gray')
+                ->link()
                 ->visible(fn (): bool => ! $this->getReport()->isFinal())
                 ->action(function (): void {
                     $readiness = app(SyncReportSectionStatusesAction::class)->handle($this->getReport());
@@ -276,16 +265,59 @@ class ProjectReportEditor extends ResourcePage
                         ->color($readiness->isReady() ? 'success' : 'warning')
                         ->send();
                 }),
+            Action::make('preview')
+                ->label(fn (): string => $this->getReport()->isFinal() ? 'View final report' : 'Preview report')
+                ->icon(Heroicon::OutlinedEye)
+                ->color('gray')
+                ->url(fn (): string => $this->previewUrl(), shouldOpenInNewTab: true),
+            Action::make('markReady')
+                ->label('Mark ready for review')
+                ->icon(Heroicon::OutlinedCheckCircle)
+                ->color('primary')
+                ->requiresConfirmation()
+                ->modalHeading(fn (): string => 'Mark the '.$this->getReport()->monthlyCycle->periodLabel().' report ready for review?')
+                ->modalDescription('Readiness is checked again now. Monthly data can still be corrected until a manager finalises the report.')
+                ->modalSubmitActionLabel('Mark ready for review')
+                ->visible(fn (): bool => ! $this->getReport()->isReadyForReview())
+                ->authorize(fn (): bool => Gate::allows('markReady', $this->getReport()))
+                ->action(function (Action $action): void {
+                    $this->runDomain($action, fn () => app(MarkReportReadyAction::class)->handle($this->getReport(), $this->currentUser()), 'Report marked Ready for Review');
+                }),
+            Action::make('finalize')
+                ->label('Finalise report')
+                ->icon(Heroicon::OutlinedLockClosed)
+                ->color('primary')
+                ->requiresConfirmation()
+                ->modalHeading(fn (): string => 'Finalise the '.$this->getReport()->monthlyCycle->periodLabel().' report?')
+                ->modalDescription(function (): string {
+                    $report = $this->getReport();
+                    $readiness = $this->getReadiness();
+
+                    return "Finalising will create the final PDF and lock this reporting month. Monthly data will become read-only.\n\nVersion: {$report->versionLabel()}\nReadiness: {$readiness->percentage()}%";
+                })
+                ->modalSubmitActionLabel('Finalise report')
+                ->authorize(fn (): bool => Gate::allows('finalize', $this->getReport()))
+                ->action(function (Action $action): void {
+                    $this->runDomain($action, fn () => app(FinalizeMonthlyReportAction::class)->handle($this->getReport(), $this->currentUser()), 'Report finalized and reporting period locked');
+                }),
+            Action::make('downloadPdf')
+                ->label('Download PDF')
+                ->icon(Heroicon::OutlinedArrowDownTray)
+                ->color('success')
+                ->authorize(fn (): bool => Gate::allows('downloadPdf', $this->getReport()))
+                ->url(fn (): string => $this->pdfUrl(), shouldOpenInNewTab: true),
         ];
     }
 
     public function editExecutiveSummaryAction(): Action
     {
         return Action::make('editExecutiveSummary')
-            ->label('Edit executive summary')
+            ->label('Edit summary')
             ->icon(Heroicon::OutlinedPencilSquare)
+            ->color('gray')
             ->size('sm')
             ->modalHeading('Executive summary')
+            ->modalDescription("Summarise the month's main results, progress and important context. This text appears in the client report.")
             ->modalWidth('3xl')
             ->schema([
                 Textarea::make('executive_summary')
@@ -293,7 +325,7 @@ class ProjectReportEditor extends ResourcePage
                     ->rows(10)
                     ->maxLength(UpdateMonthlyReportDraftAction::SUMMARY_MAX)
                     ->nullable()
-                    ->helperText('Client-facing. A non-empty summary completes the Executive Summary section.'),
+                    ->helperText('Up to '.number_format(UpdateMonthlyReportDraftAction::SUMMARY_MAX).' characters. Writing a summary completes the Executive Summary section.'),
             ])
             ->fillForm(fn (): array => ['executive_summary' => $this->getReport()->executive_summary])
             ->authorize(fn (): bool => $this->canPrepare())
@@ -312,12 +344,13 @@ class ProjectReportEditor extends ResourcePage
     public function editSectionTextAction(): Action
     {
         return Action::make('editSectionText')
-            ->label('Commentary')
+            ->label('Edit commentary')
             ->icon(Heroicon::OutlinedChatBubbleBottomCenterText)
-            ->size('xs')
+            ->size('sm')
             ->color('gray')
             ->link()
             ->modalHeading(fn (array $arguments): string => 'Commentary — '.($this->resolveSection($arguments)->title))
+            ->modalDescription('Add context or explanation for this section if needed. It appears in the client report under the section\'s figures.')
             ->modalWidth('2xl')
             ->schema([
                 Textarea::make('custom_text')
@@ -325,7 +358,7 @@ class ProjectReportEditor extends ResourcePage
                     ->rows(6)
                     ->maxLength(UpdateReportSectionTextAction::TEXT_MAX)
                     ->nullable()
-                    ->helperText('Optional client-facing interpretation or context for this section. Numbers always come from the source data.'),
+                    ->helperText('Optional. Numbers always come from the month\'s data.'),
             ])
             ->fillForm(fn (array $arguments): array => ['custom_text' => $this->resolveSection($arguments)->custom_text])
             ->authorize(fn (): bool => $this->canPrepare())
@@ -341,12 +374,13 @@ class ProjectReportEditor extends ResourcePage
     public function editReviewNotesAction(): Action
     {
         return Action::make('editReviewNotes')
-            ->label('Internal review notes')
-            ->icon(Heroicon::OutlinedLockClosed)
+            ->label('Edit notes')
+            ->icon(Heroicon::OutlinedPencilSquare)
             ->size('sm')
             ->color('gray')
+            ->link()
             ->modalHeading('Internal review notes')
-            ->modalDescription('For the team only. Never rendered into the client preview or PDF.')
+            ->modalDescription('These notes are for the SEO team and will not appear in the client report.')
             ->modalWidth('2xl')
             ->schema([
                 Textarea::make('review_notes')

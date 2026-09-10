@@ -57,9 +57,9 @@ class ProjectAnalyticsUiTest extends TestCase
         $this->get(ProjectResource::getUrl('analytics', ['record' => $this->project]))
             ->assertOk()
             ->assertSee('data-selected-cycle="'.$this->october->id.'"', false)
-            ->assertSee('No GSC data for October 2026')
-            ->assertSee('No GA4 data for October 2026')
-            ->assertSee('No authority data for October 2026')
+            ->assertSee('No Search Console data yet')
+            ->assertSee('No Google Analytics data yet')
+            ->assertSee('No authority metrics yet')
             ->assertSee('Manual Entry');
 
         // Deep link and live switch both select September.
@@ -74,12 +74,12 @@ class ProjectAnalyticsUiTest extends TestCase
 
         $this->page()
             ->assertSet('selectedCycle', (string) $this->october->id)
-            ->assertSee('No GSC data for October 2026')
+            ->assertSee('No Search Console data yet')
             ->set('selectedCycle', (string) $this->september->id)
             ->assertSee('data-gsc-clicks="900"', false)
-            ->assertDontSee('No GSC data for')
+            ->assertDontSee('No Search Console data yet')
             ->set('selectedCycle', (string) $this->october->id)
-            ->assertSee('No GSC data for October 2026')
+            ->assertSee('No Search Console data yet')
             ->assertDontSee('data-gsc-clicks="900"', false);
 
         // A crafted cycle id in the URL falls back to the default month.

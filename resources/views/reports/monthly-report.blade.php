@@ -1,6 +1,8 @@
 @php
     /** @var array<string, mixed> $snapshot */
     $forPdf = $forPdf ?? false;
+    /** @var array{back_url: string, back_label: string, state: string, final: bool, pdf_url: ?string}|null $toolbar  Browser preview only; never part of the PDF. */
+    $toolbar = $forPdf ? null : ($toolbar ?? null);
     $client = $snapshot['client'] ?? [];
     $project = $snapshot['project'] ?? [];
     $period = $snapshot['period'] ?? [];
@@ -86,8 +88,38 @@
         .targets { margin-top: 8pt; }
         .footer { margin-top: 24pt; padding-top: 8pt; border-top: 1px solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }
     </style>
+    @unless ($forPdf)
+    {{-- Browser preview only: a document-style canvas and a small toolbar. Print and PDF output are untouched. --}}
+    <style>
+        @media screen {
+            body { background: #e5e7eb; }
+            .page { background: #ffffff; padding: 16mm 14mm 18mm; margin: 24px auto 48px; box-shadow: 0 10px 30px rgba(17, 24, 39, 0.12); border-radius: 4px; }
+            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: #111827; color: #f9fafb; font-family: "Segoe UI", Arial, Helvetica, sans-serif; font-size: 13px; }
+            .toolbar a { color: #f9fafb; text-decoration: none; }
+            .toolbar a:hover { text-decoration: underline; }
+            .toolbar .state { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; background: #374151; }
+            .toolbar .state.final { background: #166534; }
+            .toolbar .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+            .toolbar .button { padding: 6px 12px; border-radius: 6px; background: #d97706; color: #111827; font-weight: 600; }
+        }
+        @media print { .toolbar { display: none !important; } }
+    </style>
+    @endunless
 </head>
 <body>
+@if ($toolbar)
+    <div class="toolbar" data-report-toolbar data-report-toolbar-state="{{ $toolbar['state'] }}">
+        <div class="actions">
+            <a href="{{ $toolbar['back_url'] }}" data-report-toolbar-back>← {{ $toolbar['back_label'] }}</a>
+            <span class="state{{ $toolbar['final'] ? ' final' : '' }}">{{ $toolbar['state'] }}</span>
+        </div>
+        <div class="actions">
+            @if ($toolbar['pdf_url'])
+                <a href="{{ $toolbar['pdf_url'] }}" class="button" data-report-toolbar-pdf>Download PDF</a>
+            @endif
+        </div>
+    </div>
+@endif
 <div class="page" data-report-snapshot-version="{{ $snapshot['schema_version'] ?? '' }}" data-report-status="{{ $snapshot['report']['status'] ?? '' }}">
 
     {{-- Cover --}}

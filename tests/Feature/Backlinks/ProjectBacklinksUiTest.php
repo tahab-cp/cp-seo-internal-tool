@@ -141,7 +141,7 @@ class ProjectBacklinksUiTest extends TestCase
         $this->get(ProjectResource::getUrl('backlinks', ['record' => $bare]))
             ->assertOk()
             ->assertSee('12 / No target')
-            ->assertSee('No target configured for this month')
+            ->assertSee('No backlink target was configured for this reporting month.')
             ->assertDontSee('12 / 0');
     }
 

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Projects\Pages;
 use App\Actions\Reports\EnsureProjectReportSectionsAction;
 use App\Actions\Reports\UpdateProjectReportSectionsAction;
 use App\Enums\ReportSectionKey;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Models\Project;
 use App\Models\ProjectReportSection;
@@ -24,17 +25,17 @@ use InvalidArgumentException;
 /**
  * Project settings → Report sections: the project's report template for
  * FUTURE reports. Super Admin and SEO Manager only (403 otherwise).
- * Existing monthly reports keep their snapshot.
+ * Existing monthly reports keep their snapshot. Presentation reads the
+ * existing records only.
  */
 class ProjectReportSections extends ResourcePage
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
 
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-report-sections';
-
-    protected static ?string $title = 'Report sections';
 
     public function mount(int|string $record): void
     {
@@ -46,9 +47,14 @@ class ProjectReportSections extends ResourcePage
         app(EnsureProjectReportSectionsAction::class)->handle($this->getProject());
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -70,16 +76,11 @@ class ProjectReportSections extends ResourcePage
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
             Action::make('editSections')
-                ->label('Edit sections')
+                ->label('Edit report sections')
                 ->icon(Heroicon::OutlinedPencilSquare)
-                ->modalHeading('Report sections')
-                ->modalDescription('Changes affect future reports only. Existing monthly reports keep their snapshotted configuration.')
+                ->modalHeading('Edit report sections')
+                ->modalDescription('Changes affect future reports only. Existing reports keep their saved section layout. Use the arrows to change the order sections appear in.')
                 ->modalWidth('4xl')
                 ->schema([
                     Repeater::make('sections')
@@ -93,10 +94,11 @@ class ProjectReportSections extends ResourcePage
                         ->schema([
                             Hidden::make('section_key'),
                             TextInput::make('title')
+                                ->label('Title in the report')
                                 ->required()
                                 ->maxLength(UpdateProjectReportSectionsAction::TITLE_MAX)
                                 ->columnSpan(2),
-                            Toggle::make('is_enabled')->label('Enabled')->inline(false),
+                            Toggle::make('is_enabled')->label('Included')->inline(false),
                             Toggle::make('is_required')->label('Required')->inline(false),
                         ]),
                 ])

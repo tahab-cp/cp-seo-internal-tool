@@ -8,11 +8,13 @@ use App\Actions\Rankings\RecordRankingSnapshotAction;
 use App\Actions\Rankings\UpdateRankingSnapshotAction;
 use App\Enums\KeywordStatus;
 use App\Exceptions\LockedMonthlyCycleException;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\KeywordForm;
 use App\Filament\Resources\Projects\Schemas\RankingForms;
 use App\Models\Keyword;
 use App\Models\MonthlyCycle;
+use App\Models\Page;
 use App\Models\Project;
 use App\Models\RankingSnapshot;
 use App\Models\User;
@@ -20,11 +22,12 @@ use App\Services\Rankings\RankingMovementService;
 use App\Support\MonthlyCycles\CyclePeriod;
 use App\Support\Rankings\MonthlyRankingSummary;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page as ResourcePage;
+use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -39,10 +42,12 @@ use Livewire\Attributes\Locked;
 /**
  * Project → Keywords → one keyword: master data, the selected month's
  * ranking summary (month start → latest, derived movement) and the full
- * observation history with Record / correct actions.
+ * observation history with Record / correct actions. Presentation reads
+ * the existing records and services only.
  */
 class ProjectKeywordDetail extends ResourcePage implements HasTable
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
     use InteractsWithTable;
 
@@ -76,14 +81,12 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
 
     public function getTitle(): string
     {
-        return $this->getKeyword()->keyword;
+        return $this->getProject()->name;
     }
 
     public function getSubheading(): ?string
     {
-        $keyword = $this->getKeyword();
-
-        return $this->getProject()->name.' — '.$keyword->displayLocation();
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -98,7 +101,7 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
     {
         return Keyword::query()
             ->where('project_id', $this->getProject()->getKey())
-            ->with('targetPage')
+            ->with(['targetPage', 'latestSnapshot'])
             ->findOrFail($this->keywordId);
     }
 
@@ -132,6 +135,29 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
         return $cycle ? app(RankingMovementService::class)->monthlySummary($this->getKeyword(), $cycle) : null;
     }
 
+    /**
+     * Presentation of the target page's path: "/interior-design", or
+     * "host/path" when the page lives on another host than the project site.
+     */
+    public function targetPagePath(Page $page): string
+    {
+        $path = $page->path ?: (parse_url($page->url, PHP_URL_PATH) ?: '/');
+        $host = strtolower((string) parse_url($page->url, PHP_URL_HOST));
+        $projectHost = strtolower((string) parse_url((string) $this->getProject()->website_url, PHP_URL_HOST));
+
+        $display = $host !== '' && preg_replace('/^www\./', '', $host) !== preg_replace('/^www\./', '', $projectHost) ? $host.$path : $path;
+
+        return mb_strlen($display) > 70 ? mb_substr($display, 0, 67).'…' : $display;
+    }
+
+    /**
+     * The page-detail URL for the target page while it is still reachable in the project.
+     */
+    public function targetPageUrl(Page $page): ?string
+    {
+        return $page->trashed() ? null : ProjectResource::getUrl('page', ['record' => $this->getRecord(), 'page' => $page]);
+    }
+
     protected function defaultCycle(): ?MonthlyCycle
     {
         $cycles = $this->getCycles();
@@ -152,20 +178,26 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
             ->columns([
                 TextColumn::make('checked_at')
                     ->label('Checked at')
-                    ->dateTime('j M Y H:i')
+                    ->dateTime('j M Y, H:i')
                     ->sortable(),
                 TextColumn::make('monthlyCycle.year')
                     ->label('Reporting month')
                     ->state(fn (RankingSnapshot $record): string => $record->monthlyCycle?->periodLabel() ?? '—')
+                    ->description(fn (RankingSnapshot $record): ?string => $record->isLocked() ? 'Locked · read-only' : null)
                     ->badge()
                     ->color(fn (RankingSnapshot $record): string => $record->isLocked() ? 'gray' : 'info'),
                 TextColumn::make('position')
                     ->state(fn (RankingSnapshot $record): string => $record->positionLabel())
+                    ->badge(fn (RankingSnapshot $record): bool => ! $record->isRanking())
+                    ->color(fn (RankingSnapshot $record): ?string => $record->isRanking() ? null : 'gray')
                     ->weight('bold')
+                    ->size(TextSize::Large)
                     ->sortable(),
                 TextColumn::make('ranking_url')
                     ->label('Ranking URL')
-                    ->limit(50)
+                    ->state(fn (RankingSnapshot $record): ?string => $record->ranking_url ? preg_replace('#^https?://(www\.)?#i', '', $record->ranking_url) : null)
+                    ->limit(40)
+                    ->tooltip(fn (RankingSnapshot $record): ?string => $record->ranking_url)
                     ->placeholder('—')
                     ->url(fn (RankingSnapshot $record): ?string => $record->ranking_url)
                     ->openUrlInNewTab(),
@@ -176,7 +208,9 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
                 Action::make('edit')
                     ->label('Correct')
                     ->icon(Heroicon::OutlinedPencilSquare)
-                    ->modalHeading('Correct ranking observation')
+                    ->link()
+                    ->size('sm')
+                    ->modalHeading('Correct ranking check')
                     ->schema(fn (): array => RankingForms::singleComponents($this->getProject()))
                     ->fillForm(fn (RankingSnapshot $record): array => RankingForms::fillFromSnapshot($record))
                     ->authorize(fn (RankingSnapshot $record): bool => Gate::allows('update', $record))
@@ -187,9 +221,10 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
                     }),
             ])
             ->toolbarActions([])
+            ->paginated([10, 25, 50])
             ->emptyStateIcon(Heroicon::OutlinedChartBar)
-            ->emptyStateHeading('No ranking snapshots yet')
-            ->emptyStateDescription('Use “Record ranking” here, or “Update rankings” on the keywords list to enter positions for every keyword at once.');
+            ->emptyStateHeading('No ranking history yet')
+            ->emptyStateDescription('Record the first ranking check for this keyword to start tracking movement.');
     }
 
     protected function getHeaderActions(): array
@@ -197,8 +232,9 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
         return [
             Action::make('backToKeywords')
                 ->label('All keywords')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
+                ->icon(Heroicon::OutlinedArrowLeft)
                 ->color('gray')
+                ->link()
                 ->url(fn (): string => ProjectResource::getUrl('keywords', ['record' => $this->getRecord()])),
             Action::make('recordRanking')
                 ->label('Record ranking')
@@ -227,26 +263,37 @@ class ProjectKeywordDetail extends ResourcePage implements HasTable
 
                     $this->runDomain($action, fn () => app(UpdateKeywordAction::class)->handle($this->getKeyword(), $data), 'Keyword updated');
                 }),
-            Action::make('setStatus')
-                ->label('Status')
-                ->icon(Heroicon::OutlinedArrowPath)
-                ->color('gray')
-                ->modalHeading('Change keyword status')
-                ->modalWidth('sm')
-                ->schema([
-                    Select::make('status')
-                        ->options(KeywordStatus::class)
-                        ->required()
-                        ->native(false),
-                ])
-                ->fillForm(fn (): array => ['status' => $this->getKeyword()->status->value])
-                ->authorize(fn (): bool => Gate::allows('setStatus', $this->getKeyword()))
-                ->action(function (array $data): void {
-                    Gate::authorize('setStatus', $this->getKeyword());
-
-                    app(SetKeywordStatusAction::class)->handle($this->getKeyword(), $data['status']);
-                }),
+            // Status changes live behind "More" so they never compete with Record ranking.
+            // Each entry is the existing status workflow (SetKeywordStatusAction + setStatus ability).
+            ActionGroup::make([
+                $this->statusAction('activate', KeywordStatus::Active, 'Activate', Heroicon::OutlinedPlayCircle, 'success'),
+                $this->statusAction('pause', KeywordStatus::Paused, 'Pause', Heroicon::OutlinedPauseCircle, 'warning'),
+                $this->statusAction('archive', KeywordStatus::Archived, 'Archive', Heroicon::OutlinedArchiveBox, 'gray')
+                    ->modalDescription('Archiving stops tracking. The keyword and all of its ranking history remain.'),
+            ])->label('More')->icon(Heroicon::OutlinedEllipsisHorizontal)->color('gray')->button(),
         ];
+    }
+
+    /**
+     * One status transition, shown only while the keyword is not already in that status.
+     */
+    protected function statusAction(string $name, KeywordStatus $status, string $label, Heroicon $icon, string $color): Action
+    {
+        return Action::make($name)
+            ->label($label)
+            ->icon($icon)
+            ->color($color)
+            ->requiresConfirmation()
+            ->modalHeading($label.' keyword')
+            ->visible(fn (): bool => $this->getKeyword()->status !== $status)
+            ->authorize(fn (): bool => Gate::allows('setStatus', $this->getKeyword()))
+            ->action(function () use ($status): void {
+                Gate::authorize('setStatus', $this->getKeyword());
+
+                app(SetKeywordStatusAction::class)->handle($this->getKeyword(), $status);
+
+                Notification::make()->title('Keyword '.strtolower($status->getLabel()))->success()->send();
+            });
     }
 
     protected function runDomain(Action $action, callable $call, string $successTitle): void

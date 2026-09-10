@@ -79,7 +79,7 @@ class ProjectReportsAccessTest extends TestCase
                 ->assertTableActionHidden('ensureReport', $this->unrelatedCycle);
 
             if ($index === 0) {
-                $component->assertSee('0%')->assertSee('0 / 9 complete');
+                $component->assertSee('0%')->assertSee('0 of 9 complete');
             }
 
             $component->assertTableActionVisible('open', $this->unrelatedCycle);
@@ -112,12 +112,12 @@ class ProjectReportsAccessTest extends TestCase
             ->assertActionHidden('reportSections')
             ->callTableAction('ensureReport', $this->assignedCycle)
             ->assertNotified('Draft report ready')
-            ->assertSee('0 / 9 complete');
+            ->assertSee('0 of 9 complete');
 
         AuthorityMetric::factory()->forCycle($this->assignedCycle)->create();
 
         Livewire::test(ProjectReports::class, ['record' => $this->assigned->getRouteKey()])
-            ->assertSee('1 / 9 complete')
+            ->assertSee('1 of 9 complete')
             ->assertSee('11%');
 
         Livewire::test(ProjectReportEditor::class, ['record' => $this->assigned->getRouteKey(), 'report' => $this->assignedCycle->monthlyReport->getKey()])

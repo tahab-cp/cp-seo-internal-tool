@@ -7,15 +7,14 @@ use App\Actions\Notes\DeleteMonthlyNoteAction;
 use App\Actions\Notes\UpdateMonthlyNoteAction;
 use App\Enums\MonthlyNoteType;
 use App\Exceptions\LockedMonthlyCycleException;
+use App\Filament\Resources\Projects\Concerns\HasProjectWorkspace;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Projects\Schemas\MonthlyNoteForm;
 use App\Models\MonthlyCycle;
 use App\Models\MonthlyNote;
 use App\Models\Project;
 use App\Models\User;
-use App\Services\MonthlyCycles\TargetProgressService;
 use App\Support\MonthlyCycles\CyclePeriod;
-use App\Support\Targets\TargetProgress;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -27,25 +26,24 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Project → Monthly Work: the selected month's narrative notes grouped
- * into Wins, Challenges / Observations and Recommendations / Next month
- * focus, plus the month's target progress at a glance.
+ * Project → Monthly Work: the selected month's notes grouped into Wins,
+ * Challenges & Observations, Recommendations and Next month focus.
  *
  * The project is resolved through ProjectResource::getEloquentQuery() (404
  * for unrelated projects), the page requires the project `view` ability
  * (403), notes are always resolved through the project's own cycles, and
  * every write is authorized by MonthlyCyclePolicy / MonthlyNotePolicy and
  * re-checked in the note actions. Not a global sidebar module.
+ * Presentation reads the existing records only.
  */
 class ProjectMonthlyWork extends ResourcePage
 {
+    use HasProjectWorkspace;
     use InteractsWithRecord;
 
     protected static string $resource = ProjectResource::class;
 
     protected string $view = 'filament.resources.projects.pages.project-monthly-work';
-
-    protected static ?string $title = 'Monthly work';
 
     public string $selectedCycle = '';
 
@@ -64,9 +62,14 @@ class ProjectMonthlyWork extends ResourcePage
         }
     }
 
-    public function getSubheading(): ?string
+    public function getTitle(): string
     {
         return $this->getProject()->name;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->getWorkspaceSubheading();
     }
 
     public function getProject(): Project
@@ -118,7 +121,9 @@ class ProjectMonthlyWork extends ResourcePage
     }
 
     /**
-     * Notes of the selected month grouped by lane: wins, challenges, recommendations.
+     * Notes of the selected month grouped into the four lanes of the screen:
+     * wins, challenges (challenges and observations), recommendations and focus
+     * (next month focus). One query; the counts come from the same collection.
      *
      * @return array<string, Collection<int, MonthlyNote>>
      */
@@ -126,31 +131,15 @@ class ProjectMonthlyWork extends ResourcePage
     {
         $notes = $this->getSelectedCycle()?->monthlyNotes()->with('createdBy')->ordered()->get() ?? new Collection;
 
-        return [
-            'wins' => $notes->filter(fn (MonthlyNote $n): bool => $n->type->group() === 'wins')->values(),
-            'challenges' => $notes->filter(fn (MonthlyNote $n): bool => $n->type->group() === 'challenges')->values(),
-            'recommendations' => $notes->filter(fn (MonthlyNote $n): bool => $n->type->group() === 'recommendations')->values(),
-        ];
-    }
-
-    /**
-     * @return list<TargetProgress>
-     */
-    public function getTargetProgress(): array
-    {
-        $cycle = $this->getSelectedCycle();
-
-        if ($cycle === null) {
-            return [];
-        }
-
-        $service = app(TargetProgressService::class);
+        $lane = fn (MonthlyNoteType ...$types): Collection => $notes
+            ->filter(fn (MonthlyNote $note): bool => in_array($note->type, $types, true))
+            ->values();
 
         return [
-            $service->pagesOptimised($cycle),
-            $service->backlinks($cycle),
-            $service->guestPosts($cycle),
-            $service->blogs($cycle),
+            'wins' => $lane(MonthlyNoteType::Win),
+            'challenges' => $lane(MonthlyNoteType::Challenge, MonthlyNoteType::Observation),
+            'recommendations' => $lane(MonthlyNoteType::Recommendation),
+            'focus' => $lane(MonthlyNoteType::NextMonthFocus),
         ];
     }
 
@@ -171,27 +160,43 @@ class ProjectMonthlyWork extends ResourcePage
 
     protected function getHeaderActions(): array
     {
-        return [
-            Action::make('viewProject')
-                ->label('Back to project')
-                ->icon(Heroicon::OutlinedArrowUturnLeft)
-                ->color('gray')
-                ->url(fn (): string => ProjectResource::getUrl('view', ['record' => $this->getRecord()])),
-        ];
+        return [];
     }
 
     /**
-     * Rendered in the view (per lane, with a default type argument).
+     * The page-level "Add note" button (type chosen in the form).
      */
     public function addNoteAction(): Action
     {
-        return Action::make('addNote')
-            ->label('Add note')
+        return $this->noteCreation(Action::make('addNote')->label('Add note'));
+    }
+
+    /**
+     * The small per-lane link ("Add win", "Add recommendation", …) with that
+     * lane's type preselected through the `type` argument.
+     */
+    public function addLaneNoteAction(): Action
+    {
+        return $this->noteCreation(Action::make('addLaneNote')->link()->size('sm'))
+            ->label(fn (array $arguments): string => ($type = $this->laneType($arguments)) ? 'Add '.strtolower($type->getLabel()) : 'Add note');
+    }
+
+    protected function laneType(array $arguments): ?MonthlyNoteType
+    {
+        return MonthlyNoteType::tryFrom((string) ($arguments['type'] ?? ''));
+    }
+
+    /**
+     * The single note-creation workflow (MonthlyNoteForm + CreateMonthlyNoteAction)
+     * shared by the page-level button and the lane links.
+     */
+    protected function noteCreation(Action $action): Action
+    {
+        return $action
             ->icon(Heroicon::OutlinedPlus)
-            ->size('sm')
             ->modalHeading(fn (): string => 'Add note — '.($this->getSelectedCycle()?->periodLabel() ?? ''))
             ->modalWidth('lg')
-            ->schema(fn (array $arguments): array => MonthlyNoteForm::components(MonthlyNoteType::tryFrom((string) ($arguments['type'] ?? ''))))
+            ->schema(fn (array $arguments): array => MonthlyNoteForm::components($this->laneType($arguments)))
             ->authorize(fn (): bool => $this->canManageSelectedCycle())
             ->action(function (array $data, Action $action): void {
                 $this->runDomain($action, function () use ($data): void {
